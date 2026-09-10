@@ -27,16 +27,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install Dependencies
         run: |
-          npm --prefix frontend install
+          cd frontend
+          npm install --force
 
       - name: Build Application
         run: |
-          npm --prefix frontend run build
-          cp frontend/dist/index.html frontend/dist/404.html
+          cd frontend
+          npm run build
+          cp dist/index.html dist/404.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
