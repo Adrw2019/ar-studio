@@ -185,38 +185,167 @@ export default function ARViewer({
         await mindarManager.start();
 
         if (isMounted) {
-          const video = mindarManager.video;
-          if (video && renderer?.domElement) {
-            console.log('[AR-STUDIO] viewport', window.innerWidth, window.innerHeight);
-            console.log('[AR-STUDIO] container', container.clientWidth, container.clientHeight);
-            console.log('[AR-STUDIO] video', video.videoWidth, video.videoHeight);
-            console.log('[AR-STUDIO] canvas',
-              renderer.domElement.clientWidth,
-              renderer.domElement.clientHeight
-            );
-          }
+          // Diagnóstico integral de dimensiones y estilos inline
+          const logARDiagnostic = (phase = 'START') => {
+            const v = mindarManager.video || container.querySelector('video');
+            const c = container.querySelector('canvas');
+            const renDom = renderer?.domElement || c;
+            const expPage = container.closest('.ar-player-page') || container.closest('.ar-viewport-container');
 
-          // Implementar resize seguro y adaptativo
-          const resizeAR = () => {
-            const width = container.clientWidth;
-            const height = container.clientHeight;
+            const cRect = container.getBoundingClientRect();
+            const vRect = v ? v.getBoundingClientRect() : { width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0 };
+            const cvRect = c ? c.getBoundingClientRect() : { width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0 };
+            const renRect = renDom ? renDom.getBoundingClientRect() : { width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0 };
+            const expRect = expPage ? expPage.getBoundingClientRect() : { width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0 };
+
+            console.log(`[AR-DIAGNOSTIC] === FASE: ${phase} ===`);
+            console.log('[AR-DIAGNOSTIC] Window & Viewport:', {
+              innerWidth: window.innerWidth,
+              innerHeight: window.innerHeight,
+              visualViewportWidth: window.visualViewport?.width,
+              visualViewportHeight: window.visualViewport?.height,
+              clientWidth: document.documentElement.clientWidth,
+              clientHeight: document.documentElement.clientHeight
+            });
+
+            console.log('[AR-DIAGNOSTIC] BoundingRects:', {
+              ARExperience: expRect,
+              ARViewer: cRect,
+              container: cRect,
+              video: vRect,
+              canvas: cvRect,
+              rendererDom: renRect
+            });
+
+            console.log('[AR-DIAGNOSTIC] Video Native Dimensions:', {
+              videoWidth: v?.videoWidth,
+              videoHeight: v?.videoHeight
+            });
+
+            console.log('[AR-DIAGNOSTIC] Inline Styles:', {
+              videoStyle: v?.style?.cssText,
+              canvasStyle: c?.style?.cssText,
+              containerStyle: container?.style?.cssText
+            });
+
+            console.table({
+              windowWidth: window.innerWidth,
+              containerWidth: cRect.width,
+              videoClientWidth: vRect.width,
+              canvasClientWidth: cvRect.width
+            });
+          };
+
+          // Normalización estricta del viewport de cámara y canvas
+          const normalizeARViewport = () => {
+            if (!container) return;
+
+            const rect = container.getBoundingClientRect();
+            const width = rect.width || window.innerWidth;
+            const height = rect.height || window.innerHeight;
 
             if (!width || !height) return;
 
+            // 1. Sincronizar dimensiones Three.js
             renderer.setSize(width, height, false);
+            if (mindarManager.mindarThree?.cssRenderer) {
+              mindarManager.mindarThree.cssRenderer.setSize(width, height);
+            }
+
+            // 2. Normalizar video: cubrir 100% sin deformar (object-fit: cover) y sin offsets
+            const v = mindarManager.video || container.querySelector('video');
+            if (v) {
+              v.style.position = 'absolute';
+              v.style.top = '0px';
+              v.style.left = '0px';
+              v.style.right = '0px';
+              v.style.bottom = '0px';
+              v.style.width = '100%';
+              v.style.height = '100%';
+              v.style.maxWidth = 'none';
+              v.style.maxHeight = 'none';
+              v.style.minWidth = '100%';
+              v.style.minHeight = '100%';
+              v.style.objectFit = 'cover';
+              v.style.margin = '0px';
+              v.style.padding = '0px';
+              v.style.transform = 'none';
+              v.style.zIndex = '1';
+            }
+
+            // 3. Normalizar canvas WebGL
+            if (renderer?.domElement) {
+              renderer.domElement.style.position = 'absolute';
+              renderer.domElement.style.top = '0px';
+              renderer.domElement.style.left = '0px';
+              renderer.domElement.style.right = '0px';
+              renderer.domElement.style.bottom = '0px';
+              renderer.domElement.style.width = '100%';
+              renderer.domElement.style.height = '100%';
+              renderer.domElement.style.maxWidth = 'none';
+              renderer.domElement.style.maxHeight = 'none';
+              renderer.domElement.style.minWidth = '100%';
+              renderer.domElement.style.minHeight = '100%';
+              renderer.domElement.style.margin = '0px';
+              renderer.domElement.style.padding = '0px';
+              renderer.domElement.style.transform = 'none';
+              renderer.domElement.style.zIndex = '2';
+            }
+
+            // 4. Normalizar cualquier canvas/div adicional de MindAR
+            const canvases = container.querySelectorAll('canvas');
+            canvases.forEach(cv => {
+              cv.style.position = 'absolute';
+              cv.style.top = '0px';
+              cv.style.left = '0px';
+              cv.style.right = '0px';
+              cv.style.bottom = '0px';
+              cv.style.width = '100%';
+              cv.style.height = '100%';
+              cv.style.maxWidth = 'none';
+              cv.style.margin = '0px';
+              cv.style.transform = 'none';
+            });
+
+            // 5. Actualizar proyección de cámara Three.js
             if (camera && typeof camera.updateProjectionMatrix === 'function') {
               camera.aspect = width / height;
               camera.updateProjectionMatrix();
             }
           };
 
-          resizeAR();
+          // Registrar estado inmediatamente después de start()
+          logARDiagnostic('DESPUES_DE_START_PRE_NORMALIZACION');
 
-          window.addEventListener('resize', resizeAR);
-          window.addEventListener('orientationchange', resizeAR);
+          // Ejecutar normalización
+          normalizeARViewport();
+
+          // Registrar estado posterior a normalización
+          logARDiagnostic('POST_NORMALIZACION');
+
+          // Vincular callback al método resize interno de MindAR
+          mindarManager.setOnResizeCallback(() => {
+            normalizeARViewport();
+          });
+
+          // Manejador reactivo de redimensionamiento y orientación
+          const handleResize = () => {
+            normalizeARViewport();
+            logARDiagnostic('RESIZE_EVENT');
+          };
+
+          window.addEventListener('resize', handleResize);
+          window.addEventListener('orientationchange', handleResize);
+          if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleResize);
+          }
+
           removeResizeListener = () => {
-            window.removeEventListener('resize', resizeAR);
-            window.removeEventListener('orientationchange', resizeAR);
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('orientationchange', handleResize);
+            if (window.visualViewport) {
+              window.visualViewport.removeEventListener('resize', handleResize);
+            }
           };
 
           onLoaded();
@@ -257,5 +386,5 @@ export default function ARViewer({
     }
   }, [resetTrigger]);
 
-  return <div ref={containerRef} className="ar-viewer ar-scene-container" />;
+  return <div ref={containerRef} className="ar-camera-viewport ar-viewer ar-scene-container" />;
 }

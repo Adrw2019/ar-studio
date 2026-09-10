@@ -11,8 +11,17 @@ import { demoMarkers, interactionRules } from '../ar/config';
 import { apiService } from '../services/api';
 
 export default function ARExperience() {
-  const { slug } = useParams();
+  const { slug: rawSlug } = useParams();
+  const slug = rawSlug || (typeof window !== 'undefined' && window.location.pathname.includes('/demo') ? 'demo' : null);
   const navigate = useNavigate();
+
+  // Activar estilos exclusivos en body durante el montaje de la experiencia AR
+  useEffect(() => {
+    document.body.classList.add('ar-active');
+    return () => {
+      document.body.classList.remove('ar-active');
+    };
+  }, []);
 
   // Estados del Proyecto: 'loading', 'ready', 'empty', 'not_found', 'error'
   const [loadState, setLoadState] = useState('loading');
@@ -258,7 +267,7 @@ export default function ARExperience() {
 
   // 5. Estado listo: Proyecto válido cargado
   return (
-    <div className="ar-viewport-container">
+    <div className="ar-player-page ar-viewport-container">
       {/* 1. Visor AR (WebGL Canvas + MindAR Video Stream) */}
       {!errorMessage && (
         <ARViewer

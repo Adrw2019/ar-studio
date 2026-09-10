@@ -125,12 +125,17 @@ export class MindARManager {
     video.playsInline = true;
     video.autoplay = true;
     video.style.position = 'absolute';
-    video.style.inset = '0px';
+    video.style.top = '0px';
+    video.style.left = '0px';
+    video.style.right = '0px';
+    video.style.bottom = '0px';
     video.style.zIndex = '1';
     video.style.width = '100%';
     video.style.height = '100%';
     video.style.objectFit = 'cover';
     video.style.margin = '0px';
+    video.style.padding = '0px';
+    video.style.maxWidth = 'none';
 
     this.container.appendChild(video);
 
@@ -226,8 +231,17 @@ export class MindARManager {
         filterBeta: this.filterBeta
       });
 
-      // Proteger _startAR para capturar errores de WebGL/WASM y no congelar la promesa
+      // Interceptar resize interno de MindAR para disparar normalización de viewport
       const instance = this.mindarThree;
+      const originalMindARResize = instance.resize.bind(instance);
+      instance.resize = () => {
+        originalMindARResize();
+        if (typeof this.onResizeCallback === 'function') {
+          this.onResizeCallback();
+        }
+      };
+
+      // Proteger _startAR para capturar errores de WebGL/WASM y no congelar la promesa
       const originalStartAR = instance._startAR.bind(instance);
       instance._startAR = function () {
         return new Promise((resolve, reject) => {
@@ -258,6 +272,13 @@ export class MindARManager {
       console.error('Error al instanciar MindARThree:', err);
       throw this.parseError(err);
     }
+  }
+
+  /**
+   * Configura callback que se invoca inmediatamente tras redimensionamientos de MindAR
+   */
+  setOnResizeCallback(cb) {
+    this.onResizeCallback = cb;
   }
 
   /**

@@ -81,6 +81,32 @@ html, body {
   flex-direction: column;
 }
 
+/* AR Player Fullscreen Viewport Override (Active during ARExperience) */
+body.ar-active {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  position: fixed !important;
+  inset: 0 !important;
+  max-width: none !important;
+}
+
+body.ar-active #root {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  overflow: hidden !important;
+}
+
 /* Typography styles */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
