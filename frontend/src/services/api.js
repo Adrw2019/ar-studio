@@ -3,7 +3,8 @@
  * Métodos para interactuar con la API REST del backend
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const rawApiUrl = (import.meta.env.VITE_API_URL || '/api').trim().replace(/\/+$/, '');
+const API_BASE_URL = rawApiUrl;
 console.log('[AR-STUDIO API] Base URL:', API_BASE_URL);
 
 /**
