@@ -12,29 +12,14 @@ export default function LoadingScreen({ message = 'Iniciando cámara y motor de 
     return () => clearTimeout(timer);
   }, []);
 
-  const handleManualActivate = async (e) => {
+  const handleManualActivate = (e) => {
     if (e) e.stopPropagation();
     const videos = document.querySelectorAll('video');
-    for (const v of videos) {
+    videos.forEach((v) => {
       v.muted = true;
       v.playsInline = true;
-      if (!v.srcObject && navigator.mediaDevices?.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: { facingMode: { ideal: 'environment' } }
-          });
-          v.srcObject = stream;
-        } catch (err) {
-          console.warn('Permiso manual:', err);
-        }
-      }
-      try {
-        await v.play();
-      } catch (err) {
-        console.warn('Play manual:', err);
-      }
-    }
+      v.play().catch((err) => console.warn('[LoadingScreen] Play manual:', err));
+    });
   };
 
   return (

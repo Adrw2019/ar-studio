@@ -1,9 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// Soporte automático para Netlify (base: '/') y GitHub Pages (base: '/ar-studio/')
+const base = process.env.NETLIFY ? '/' : (process.env.VITE_BASE_PATH || '/ar-studio/');
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: '/ar-studio/',
+  base,
   plugins: [react()],
   server: {
     host: true, // Escuchar en todas las IPs locales para acceso móvil desde la misma red WiFi

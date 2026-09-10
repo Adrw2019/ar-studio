@@ -171,21 +171,8 @@ export default function ARViewer({
           renderer.render(scene, camera);
         });
 
-        // 7. Arrancar cámara y tracking con timeout de seguridad (18s)
-        await Promise.race([
-          mindarManager.start(),
-          new Promise((_, reject) =>
-            setTimeout(
-              () =>
-                reject(
-                  new Error(
-                    'Tiempo de espera agotado al conectar la cámara o descargar los marcadores. Por favor verifica los permisos de cámara en tu navegador y presiona "Reintentar".'
-                  )
-                ),
-              18000
-            )
-          )
-        ]);
+        // 7. Arrancar cámara y tracking
+        await mindarManager.start();
 
         if (isMounted) {
           onLoaded();
@@ -193,7 +180,7 @@ export default function ARViewer({
       } catch (err) {
         console.error('[ARViewer] Error en el pipeline AR:', err);
         if (isMounted) {
-          onError(err.message || 'No se pudo iniciar la experiencia de Realidad Aumentada.');
+          onError(err.message || 'No fue posible iniciar la cámara');
         }
       }
     }
