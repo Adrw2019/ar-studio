@@ -36,7 +36,13 @@ jobs:
           npm install --no-audit --no-fund
 
       - name: Build Application
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL || secrets.VITE_API_URL }}
         run: |
+          echo "VITE_API_URL=$VITE_API_URL"
+          if [ -z "$VITE_API_URL" ]; then
+            echo "::warning::VITE_API_URL no está configurada en GitHub (Settings -> Secrets and variables -> Actions -> Variables). La compilación usará '/api' como valor por defecto."
+          fi
           cd frontend
           npm run build
           cp dist/index.html dist/404.html

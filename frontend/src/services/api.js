@@ -4,6 +4,7 @@
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+console.log('[AR-STUDIO API] Base URL:', API_BASE_URL);
 
 /**
  * Función segura para procesar respuestas HTTP y evitar errores crípticos de parsing JSON
