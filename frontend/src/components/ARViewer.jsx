@@ -78,7 +78,7 @@ export default function ARViewer({
         // 1. Instanciar MindAR Manager
         const mindarManager = new MindARManager({
           container,
-          imageTargetSrc: resolveAssetPath(mindFileUrl || 'markers/targets.mind'),
+          imageTargetSrc: mindFileUrl || 'markers/targets.mind',
           maxTrack: Math.max(2, resolvedMarkers.length),
           uiLoading: 'no',
           uiScanning: 'no',
