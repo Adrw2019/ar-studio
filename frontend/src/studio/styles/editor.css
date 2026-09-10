@@ -1,0 +1,390 @@
+/* ==========================================================================
+   AR STUDIO - 3D PROJECT EDITOR STYLES (PC 3-PANE & MOBILE-FIRST TABS)
+   ========================================================================== */
+
+.editor-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: #080b11;
+  color: var(--text-primary);
+}
+
+/* Studio Navbar */
+.studio-navbar {
+  height: 56px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-glass);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  z-index: 30;
+  gap: 0.75rem;
+}
+
+.studio-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.project-title-input {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  outline: none;
+  max-width: 240px;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.project-title-input:hover,
+.project-title-input:focus {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-glass);
+}
+
+.save-status-pill {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+}
+
+.save-status-pill.saving {
+  color: var(--accent-amber);
+}
+
+.save-status-pill.saved {
+  color: var(--accent-green);
+}
+
+.studio-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Editor Main Workspace */
+.editor-workspace {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   PC 3-AREA DESKTOP LAYOUT (min-width: 1024px)
+   -------------------------------------------------------------------------- */
+@media (min-width: 1024px) {
+  .editor-panel-left {
+    width: 280px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-glass);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+    overflow-y: auto;
+  }
+
+  .editor-viewport-center {
+    flex: 1;
+    position: relative;
+    background: radial-gradient(circle at center, #111827 0%, #080b11 100%);
+    overflow: hidden;
+  }
+
+  .editor-panel-right {
+    width: 320px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-glass);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+    overflow-y: auto;
+  }
+
+  .editor-mobile-tab-bar {
+    display: none !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   TABLET & MOBILE LAYOUT (< 1024px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .editor-workspace {
+    flex-direction: column;
+  }
+
+  .editor-viewport-center {
+    flex: 1;
+    width: 100%;
+    position: relative;
+    background: #080b11;
+  }
+
+  /* Bottom sheet or full screen tabs on mobile */
+  .editor-panel-left,
+  .editor-panel-right {
+    position: absolute;
+    inset: 0;
+    bottom: 56px; /* Leave space for bottom tab bar */
+    background: rgba(13, 18, 29, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: 25;
+    overflow-y: auto;
+    display: none;
+    padding-bottom: 2rem;
+  }
+
+  .editor-panel-left.tab-active,
+  .editor-panel-right.tab-active {
+    display: flex;
+    flex-direction: column;
+    animation: slide-up 200ms ease;
+  }
+
+  .editor-mobile-tab-bar {
+    height: 56px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-glass);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 0.5rem;
+    z-index: 30;
+  }
+
+  .mobile-tab-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.4rem;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: color var(--transition-fast);
+  }
+
+  .mobile-tab-btn.active {
+    color: var(--accent-cyan);
+  }
+}
+
+/* Panel Header & Section Styles */
+.panel-header {
+  padding: 1rem 1.15rem 0.75rem 1.15rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-header h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.panel-content {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Tree of Markers & Elements */
+.marker-card-tree-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  border-radius: 14px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.marker-card-tree-item.selected {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 242, 254, 0.08);
+  box-shadow: 0 0 16px rgba(0, 242, 254, 0.15);
+}
+
+.marker-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.marker-tree-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.asset-sub-item {
+  margin-left: 1rem;
+  padding: 0.45rem 0.65rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.asset-sub-item.selected {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: rgba(0, 242, 254, 0.1);
+}
+
+/* Inspector Controls (Sliders, Numbers) */
+.inspector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.inspector-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.transform-axis-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.axis-input-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.axis-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.axis-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-glass);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 0.4rem 0.5rem;
+  width: 100%;
+  outline: none;
+}
+
+.axis-input:focus {
+  border-color: var(--accent-cyan);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-input, .form-textarea, .form-select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-glass);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: 0.55rem 0.75rem;
+  outline: none;
+  width: 100%;
+}
+
+.form-textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.form-input:focus, .form-textarea:focus, .form-select:focus {
+  border-color: var(--accent-cyan);
+}
+
+/* 3D Viewport Controls HUD Overlay */
+.viewport-hud {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.viewport-hud-btn {
+  background: rgba(13, 18, 29, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  padding: 0.4rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.viewport-info-tag {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  background: rgba(13, 18, 29, 0.75);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-subtle);
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}

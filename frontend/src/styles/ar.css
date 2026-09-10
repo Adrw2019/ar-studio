@@ -1,0 +1,397 @@
+/* ==========================================================================
+   AR STUDIO - AR EXPERIENCE & CAMERA VIEWPORT STYLES (MOBILE-FIRST)
+   ========================================================================== */
+
+.ar-viewport-container {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #000;
+  touch-action: none;
+}
+
+/* Three.js / MindAR Video & Canvas Container */
+.ar-scene-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.ar-scene-container video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  z-index: 1;
+}
+
+.ar-scene-container canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 2;
+  touch-action: none;
+}
+
+/* Floating UI Overlay Layer */
+.ar-ui-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none; /* Let touches pass through to canvas by default */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: calc(var(--sat) + 0.75rem) calc(var(--sar) + 1rem) calc(var(--sab) + 1.25rem) calc(var(--sal) + 1rem);
+}
+
+/* Top Navigation Bar */
+.ar-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  pointer-events: auto;
+}
+
+.ar-brand-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(13, 18, 29, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass);
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+}
+
+.ar-brand-text {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.ar-badge-live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan);
+  animation: pulse-ring 2s infinite;
+}
+
+.ar-round-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(13, 18, 29, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast), background var(--transition-fast);
+  touch-action: manipulation;
+}
+
+.ar-round-btn:active {
+  transform: scale(0.92);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Target Guide Finder Box (Scanning Reticle) */
+.ar-scan-reticle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 240px;
+  height: 320px;
+  max-width: 75vw;
+  max-height: 55vh;
+  border: 2px dashed rgba(0, 242, 254, 0.4);
+  border-radius: 18px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  transition: opacity 300ms ease, border-color 300ms ease;
+}
+
+.ar-scan-reticle.detected {
+  opacity: 0;
+  border-color: var(--accent-green);
+}
+
+.reticle-corner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: var(--accent-cyan);
+  border-style: solid;
+}
+
+.reticle-corner.tl { top: -2px; left: -2px; border-width: 3px 0 0 3px; border-top-left-radius: 16px; }
+.reticle-corner.tr { top: -2px; right: -2px; border-width: 3px 3px 0 0; border-top-right-radius: 16px; }
+.reticle-corner.bl { bottom: -2px; left: -2px; border-width: 0 0 3px 3px; border-bottom-left-radius: 16px; }
+.reticle-corner.br { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; border-bottom-right-radius: 16px; }
+
+.reticle-hint {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.5);
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  text-align: center;
+  backdrop-filter: blur(4px);
+}
+
+/* Dynamic Marker Status Toast */
+.ar-status-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  pointer-events: auto;
+}
+
+.marker-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1.15rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-smooth);
+}
+
+.status-searching {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+.status-detected {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.6);
+  color: #34d399;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
+}
+
+.status-lost {
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #fb7185;
+}
+
+.status-interaction {
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.3) 0%, rgba(138, 43, 226, 0.3) 100%);
+  border: 1px solid var(--accent-cyan);
+  color: #ffffff;
+  box-shadow: 0 0 25px rgba(0, 242, 254, 0.5);
+  animation: pulse-ring 1.5s infinite;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.status-searching .status-dot {
+  background-color: var(--accent-amber);
+  box-shadow: 0 0 8px var(--accent-amber);
+  animation: pulse-ring 1.5s infinite;
+}
+
+.status-detected .status-dot {
+  background-color: var(--accent-green);
+  box-shadow: 0 0 10px var(--accent-green);
+}
+
+.status-lost .status-dot {
+  background-color: var(--accent-rose);
+}
+
+/* Bottom Controls Bar */
+.ar-bottom-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  width: 100%;
+  pointer-events: auto;
+}
+
+.ar-control-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(13, 18, 29, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  padding: 0.75rem 1.15rem;
+  border-radius: 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: transform var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+  touch-action: manipulation;
+  min-height: 48px;
+}
+
+.ar-control-btn:active {
+  transform: scale(0.94);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ar-control-btn.active {
+  background: rgba(0, 242, 254, 0.2);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.ar-control-btn.icon-only {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+/* Touch Instruction Hint */
+.ar-touch-hint {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Loading & Error Overlays */
+.ar-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  gap: 1.5rem;
+}
+
+.loading-spinner-ring {
+  width: 64px;
+  height: 64px;
+  border: 4px solid rgba(0, 242, 254, 0.15);
+  border-top-color: var(--accent-cyan);
+  border-radius: 50%;
+  animation: spin-slow 1s linear infinite;
+}
+
+.ar-error-card {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  box-shadow: 0 0 30px rgba(244, 63, 94, 0.2);
+  border-radius: 24px;
+  padding: 1.75rem;
+  max-width: 380px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+}
+
+.error-icon-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--accent-rose);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Interactive Card Info Modal (Tapped Model) */
+.ar-info-sheet {
+  position: absolute;
+  bottom: calc(var(--sab) + 5rem);
+  left: 1rem;
+  right: 1rem;
+  max-width: 440px;
+  margin: 0 auto;
+  z-index: 20;
+  pointer-events: auto;
+  background: var(--bg-glass-high);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-glow);
+  box-shadow: var(--shadow-lg), var(--glow-cyan);
+  border-radius: 20px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  animation: slide-up 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.info-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.info-sheet-header h3 {
+  font-size: 1.15rem;
+  color: var(--text-primary);
+}
+
+.info-sheet-content {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
