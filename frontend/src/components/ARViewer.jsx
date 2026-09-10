@@ -3,6 +3,7 @@ import { MindARManager } from '../ar/mindarManager';
 import { SceneManager } from '../ar/sceneManager';
 import { InteractionManager } from '../ar/interactionManager';
 import { demoMarkers as fallbackDemoMarkers, interactionRules as fallbackRules } from '../ar/config';
+import { resolveAssetPath } from '../utils/paths';
 
 export default function ARViewer({
   markers: propMarkers,
@@ -38,7 +39,7 @@ export default function ARViewer({
           id: m.id || idx,
           name: m.name,
           targetIndex: m.target_index ?? idx,
-          modelUrl: associatedAsset.file_url || '/models/motor.glb',
+          modelUrl: resolveAssetPath(associatedAsset.file_url || 'models/motor.glb'),
           scale: [
             parseFloat(associatedAsset.scale_x ?? 0.75),
             parseFloat(associatedAsset.scale_y ?? 0.75),
@@ -77,7 +78,7 @@ export default function ARViewer({
         // 1. Instanciar MindAR Manager
         const mindarManager = new MindARManager({
           container,
-          imageTargetSrc: mindFileUrl || '/markers/targets.mind',
+          imageTargetSrc: resolveAssetPath(mindFileUrl || 'markers/targets.mind'),
           maxTrack: Math.max(2, resolvedMarkers.length),
           uiLoading: 'no',
           uiScanning: 'no',
@@ -170,8 +171,21 @@ export default function ARViewer({
           renderer.render(scene, camera);
         });
 
-        // 7. Arrancar cámara y tracking
-        await mindarManager.start();
+        // 7. Arrancar cámara y tracking con timeout de seguridad (18s)
+        await Promise.race([
+          mindarManager.start(),
+          new Promise((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    'Tiempo de espera agotado al conectar la cámara o descargar los marcadores. Por favor verifica los permisos de cámara en tu navegador y presiona "Reintentar".'
+                  )
+                ),
+              18000
+            )
+          )
+        ]);
 
         if (isMounted) {
           onLoaded();

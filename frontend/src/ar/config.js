@@ -3,13 +3,15 @@
  * Estructura extensible para proyectos educativos y multi-marcador
  */
 
+import { resolveAssetPath } from '../utils/paths';
+
 export const demoMarkers = [
   {
     id: 0,
     name: "Motor",
     targetIndex: 0,
-    modelUrl: "/models/motor.glb",
-    previewImage: "/markers/card-motor.png",
+    modelUrl: resolveAssetPath("models/motor.glb"),
+    previewImage: resolveAssetPath("markers/card-motor.png"),
     scale: [0.75, 0.75, 0.75],
     position: [0, 0, 0],
     rotation: [0, 0, 0],
@@ -28,8 +30,8 @@ export const demoMarkers = [
     id: 1,
     name: "Energía",
     targetIndex: 1,
-    modelUrl: "/models/energy.glb",
-    previewImage: "/markers/card-energy.png",
+    modelUrl: resolveAssetPath("models/energy.glb"),
+    previewImage: resolveAssetPath("markers/card-energy.png"),
     scale: [0.75, 0.75, 0.75],
     position: [0, 0, 0],
     rotation: [0, 0, 0],
@@ -54,6 +56,6 @@ export const interactionRules = [
     action: "startMotor",
     title: "⚡ ¡Circuito Cerrado!",
     message: "La fuente de energía ha suministrado corriente al motor. ¡Motor encendido a 3000 RPM!",
-    soundEffect: "/audio/motor-hum.mp3"
+    soundEffect: resolveAssetPath("audio/motor-hum.mp3")
   }
 ];

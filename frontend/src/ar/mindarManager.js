@@ -3,11 +3,23 @@
  * Encapsula la inicialización, ciclo de vida, permisos de cámara y tracking de MindAR
  */
 import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js';
+import { resolveAssetPath } from '../utils/paths';
 
 export class MindARManager {
   constructor(options = {}) {
     this.container = options.container;
-    this.imageTargetSrc = options.imageTargetSrc || '/markers/targets.mind';
+    
+    // Resolver URL absoluta del archivo .mind
+    let rawTarget = resolveAssetPath(options.imageTargetSrc || 'markers/targets.mind');
+    if (typeof window !== 'undefined' && rawTarget && !rawTarget.startsWith('http')) {
+      try {
+        rawTarget = new URL(rawTarget, window.location.href).href;
+      } catch (e) {
+        // fallback
+      }
+    }
+    this.imageTargetSrc = rawTarget;
+    
     this.maxTrack = options.maxTrack || 2;
     this.uiLoading = options.uiLoading || 'no';
     this.uiScanning = options.uiScanning || 'no';
@@ -26,6 +38,23 @@ export class MindARManager {
   async initialize() {
     if (!this.container) {
       throw new Error('El contenedor DOM para MindAR es requerido.');
+    }
+
+    // 1. Pre-verificar que el archivo de targets existe y responde con HTTP 200
+    try {
+      console.info('[MindARManager] Validando archivo de targets:', this.imageTargetSrc);
+      const res = await fetch(this.imageTargetSrc);
+      if (!res.ok) {
+        throw new Error(`Error ${res.status} al descargar ${this.imageTargetSrc}`);
+      }
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength < 1000) {
+        throw new Error(`Archivo targets.mind corrupto o muy pequeño (${buf.byteLength} bytes).`);
+      }
+      console.info('[MindARManager] Targets validados exitosamente:', buf.byteLength, 'bytes.');
+    } catch (fetchErr) {
+      console.error('[MindARManager] Error al verificar marcadores:', fetchErr);
+      throw this.parseError(fetchErr);
     }
 
     try {
@@ -143,14 +172,22 @@ export class MindARManager {
       // Proteger _startAR para capturar errores de WebGL/WASM y no congelar la promesa
       const originalStartAR = instance._startAR.bind(instance);
       instance._startAR = function() {
-        return new Promise(async (resolve, reject) => {
-          try {
-            await originalStartAR();
-            resolve();
-          } catch (arErr) {
-            console.error('Error al inicializar tracker AR (WebGL/WASM):', arErr);
-            reject(arErr);
-          }
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Tiempo de espera agotado al inicializar el procesador de visión AR.'));
+          }, 15000);
+
+          Promise.resolve()
+            .then(() => originalStartAR())
+            .then(() => {
+              clearTimeout(timeout);
+              resolve();
+            })
+            .catch((arErr) => {
+              clearTimeout(timeout);
+              console.error('[MindARManager] Error en _startAR:', arErr);
+              reject(arErr);
+            });
         });
       };
 
@@ -188,7 +225,12 @@ export class MindARManager {
     }
 
     try {
-      await this.mindarThree.start();
+      await Promise.race([
+        this.mindarThree.start(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Tiempo de espera de inicialización AR agotado.')), 20000)
+        )
+      ]);
       this.isStarted = true;
       return true;
     } catch (err) {

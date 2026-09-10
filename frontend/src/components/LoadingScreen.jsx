@@ -12,18 +12,33 @@ export default function LoadingScreen({ message = 'Iniciando cámara y motor de 
     return () => clearTimeout(timer);
   }, []);
 
-  const handleManualActivate = () => {
-    // Buscar y forzar reproducción de cualquier elemento video existente en la página
+  const handleManualActivate = async (e) => {
+    if (e) e.stopPropagation();
     const videos = document.querySelectorAll('video');
-    videos.forEach((v) => {
+    for (const v of videos) {
       v.muted = true;
       v.playsInline = true;
-      v.play().catch((err) => console.warn('Intento manual de play:', err));
-    });
+      if (!v.srcObject && navigator.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: { ideal: 'environment' } }
+          });
+          v.srcObject = stream;
+        } catch (err) {
+          console.warn('Permiso manual:', err);
+        }
+      }
+      try {
+        await v.play();
+      } catch (err) {
+        console.warn('Play manual:', err);
+      }
+    }
   };
 
   return (
-    <div className="ar-loading-overlay" onClick={handleManualActivate}>
+    <div className="ar-loading-overlay">
       <div className="loading-spinner-ring" />
       
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
@@ -59,6 +74,16 @@ export default function LoadingScreen({ message = 'Iniciando cámara y motor de 
           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', maxWidth: '280px', lineHeight: '1.3' }}>
             Si tu celular bloqueó el video automático, toca el botón de arriba para conceder acceso.
           </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem', marginTop: '0.25rem' }}
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCw size={14} />
+            <span>Recargar página</span>
+          </button>
         </div>
       ) : (
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
