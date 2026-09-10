@@ -1,7 +1,7 @@
 [build]
-  base = "frontend"
-  publish = "dist"
-  command = "npm run build"
+  command = "npm run build:frontend"
+  publish = "frontend/dist"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "20"
@@ -11,6 +11,16 @@
   [headers.values]
     Permissions-Policy = "camera=*, microphone=*"
     Access-Control-Allow-Origin = "*"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/api/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/uploads/*"
+  to = "/.netlify/functions/api/uploads/:splat"
+  status = 200
 
 [[redirects]]
   from = "/*"

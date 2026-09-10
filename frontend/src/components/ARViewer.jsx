@@ -2,7 +2,6 @@ import React, { useEffect, useRef } from 'react';
 import { MindARManager } from '../ar/mindarManager';
 import { SceneManager } from '../ar/sceneManager';
 import { InteractionManager } from '../ar/interactionManager';
-import { demoMarkers as fallbackDemoMarkers, interactionRules as fallbackRules } from '../ar/config';
 import { resolveAssetPath } from '../utils/paths';
 
 export default function ARViewer({
@@ -25,12 +24,13 @@ export default function ARViewer({
 
   useEffect(() => {
     let isMounted = true;
+    let removeResizeListener = null;
     const container = containerRef.current;
     if (!container) return;
 
-    // Normalizar marcadores y assets pasados por prop
-    let resolvedMarkers = fallbackDemoMarkers;
-    let resolvedRules = propRules && propRules.length > 0 ? propRules : fallbackRules;
+    // Normalizar marcadores y assets pasados por prop (SIN fallback demo automático)
+    let resolvedMarkers = [];
+    let resolvedRules = [];
 
     if (propMarkers && propMarkers.length > 0) {
       resolvedMarkers = propMarkers.map((m, idx) => {
@@ -57,17 +57,27 @@ export default function ARViewer({
           ],
           info: associatedAsset.configuration || {
             title: m.name,
-            description: m.description || 'Objeto de Realidad Aumentada interactivo.'
+            description: m.description || 'Elemento de Realidad Aumentada interactivo.'
           }
         };
       });
+    }
+
+    if (propRules && propRules.length > 0) {
+      resolvedRules = propRules;
+    }
+
+    // Si no existen marcadores configurados, no inicializar el motor AR
+    if (resolvedMarkers.length === 0) {
+      console.warn('[ARViewer] No hay marcadores configurados para este proyecto.');
+      return;
     }
 
     // Normalizar reglas
     const normalizedRules = resolvedRules.map((r, i) => ({
       id: r.id || `rule-${i}`,
       name: r.name || 'Regla Multi-Tarjeta',
-      requiredMarkers: r.trigger_config?.required_markers || r.requiredMarkers || ['Motor', 'Energía'],
+      requiredMarkers: r.trigger_config?.required_markers || r.requiredMarkers || [],
       action: r.action_type || r.action || 'startMotor',
       title: r.action_config?.title || r.title || '⚡ ¡Interacción Activada!',
       message: r.action_config?.message || r.message || 'Tarjetas detectadas e interactuando.'
@@ -175,6 +185,40 @@ export default function ARViewer({
         await mindarManager.start();
 
         if (isMounted) {
+          const video = mindarManager.video;
+          if (video && renderer?.domElement) {
+            console.log('[AR-STUDIO] viewport', window.innerWidth, window.innerHeight);
+            console.log('[AR-STUDIO] container', container.clientWidth, container.clientHeight);
+            console.log('[AR-STUDIO] video', video.videoWidth, video.videoHeight);
+            console.log('[AR-STUDIO] canvas',
+              renderer.domElement.clientWidth,
+              renderer.domElement.clientHeight
+            );
+          }
+
+          // Implementar resize seguro y adaptativo
+          const resizeAR = () => {
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            if (!width || !height) return;
+
+            renderer.setSize(width, height, false);
+            if (camera && typeof camera.updateProjectionMatrix === 'function') {
+              camera.aspect = width / height;
+              camera.updateProjectionMatrix();
+            }
+          };
+
+          resizeAR();
+
+          window.addEventListener('resize', resizeAR);
+          window.addEventListener('orientationchange', resizeAR);
+          removeResizeListener = () => {
+            window.removeEventListener('resize', resizeAR);
+            window.removeEventListener('orientationchange', resizeAR);
+          };
+
           onLoaded();
         }
       } catch (err) {
@@ -189,6 +233,9 @@ export default function ARViewer({
 
     return () => {
       isMounted = false;
+      if (removeResizeListener) {
+        removeResizeListener();
+      }
       if (interactionManagerRef.current) {
         interactionManagerRef.current.destroy();
       }
@@ -210,5 +257,5 @@ export default function ARViewer({
     }
   }, [resetTrigger]);
 
-  return <div ref={containerRef} className="ar-scene-container" />;
+  return <div ref={containerRef} className="ar-viewer ar-scene-container" />;
 }

@@ -1,22 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, AlertTriangle, HelpCircle, Layers } from 'lucide-react';
+import { ArrowLeft, RefreshCw, AlertTriangle, HelpCircle, Layers, FolderOpen } from 'lucide-react';
 import ARViewer from '../components/ARViewer';
 import MarkerStatus from '../components/MarkerStatus';
 import ARControls from '../components/ARControls';
 import LoadingScreen from '../components/LoadingScreen';
 import InfoModal from '../components/InfoModal';
 import TargetPreviewModal from '../components/TargetPreviewModal';
-import { demoMarkers as defaultMarkers } from '../ar/config';
+import { demoMarkers, interactionRules } from '../ar/config';
 import { apiService } from '../services/api';
 
 export default function ARExperience() {
   const { slug } = useParams();
   const navigate = useNavigate();
 
-  // Estados del Proyecto
+  // Estados del Proyecto: 'loading', 'ready', 'empty', 'not_found', 'error'
+  const [loadState, setLoadState] = useState('loading');
   const [projectData, setProjectData] = useState(null);
-  const [isFetchingProject, setIsFetchingProject] = useState(true);
+  const [projectError, setProjectError] = useState(null);
 
   // Estados de la experiencia AR
   const [isLoading, setIsLoading] = useState(true);
@@ -36,26 +37,69 @@ export default function ARExperience() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [resetTrigger, setResetTrigger] = useState(0);
 
-  useEffect(() => {
-    async function loadProject() {
-      if (!slug || slug === 'demo') {
-        setIsFetchingProject(false);
-        return;
-      }
-      setIsFetchingProject(true);
-      try {
-        const project = await apiService.getProjectBySlug(slug);
-        if (project) {
-          setProjectData(project);
-        }
-      } catch (err) {
-        console.warn('No se pudo cargar el proyecto por slug, usando configuración demo:', err);
-      } finally {
-        setIsFetchingProject(false);
-      }
+  const loadProject = useCallback(async () => {
+    // 1. Si no hay slug, no cargar marcadores ni motor
+    if (!slug) {
+      setProjectData(null);
+      setLoadState('empty');
+      return;
     }
-    loadProject();
+
+    // 2. Ruta explícita de demo de desarrollo
+    if (slug === 'demo') {
+      const demoProject = {
+        id: 'demo',
+        name: 'Demo: Motor y Energía',
+        slug: 'demo',
+        status: 'demo',
+        mind_file_url: 'markers/targets.mind',
+        max_track_targets: 2,
+        markers: demoMarkers,
+        assets: demoMarkers.map((m) => ({
+          id: `asset-${m.id}`,
+          marker_id: m.id,
+          file_url: m.modelUrl,
+          scale_x: m.scale[0],
+          scale_y: m.scale[1],
+          scale_z: m.scale[2],
+          position_x: m.position[0],
+          position_y: m.position[1],
+          position_z: m.position[2],
+          rotation_x: m.rotation[0],
+          rotation_y: m.rotation[1],
+          rotation_z: m.rotation[2],
+          configuration: m.info
+        })),
+        interactions: interactionRules
+      };
+      setProjectData(demoProject);
+      setLoadState('ready');
+      return;
+    }
+
+    // 3. Cargar proyecto real desde la API
+    setLoadState('loading');
+    setProjectError(null);
+    try {
+      const project = await apiService.getProjectBySlug(slug);
+      if (project && project.id) {
+        setProjectData(project);
+        setLoadState('ready');
+      } else {
+        setProjectData(null);
+        setLoadState('not_found');
+      }
+    } catch (err) {
+      console.error('[ARExperience] Error al consultar proyecto:', err);
+      setProjectData(null);
+      setProjectError(err.message || 'No se pudo cargar el proyecto');
+      setLoadState('error');
+    }
   }, [slug]);
+
+  useEffect(() => {
+    loadProject();
+  }, [loadProject]);
 
   // Callbacks para eventos del motor AR
   const handleStatusChange = useCallback((newStatus) => {
@@ -97,6 +141,7 @@ export default function ARExperience() {
   const handleReset = useCallback(() => {
     setResetTrigger(prev => prev + 1);
     setIsInfoModalOpen(false);
+    setSelectedMarkerInfo(null);
     setInteractionState({ active: false, title: '', message: '' });
   }, []);
 
@@ -104,21 +149,114 @@ export default function ARExperience() {
     if (isInfoModalOpen) {
       setIsInfoModalOpen(false);
     } else {
-      const markers = projectData?.markers || defaultMarkers;
-      const activeMarker = markers.find(m => m.name === statusState.activeMarkerName) || markers[0];
-      const associatedAsset = projectData?.assets?.find(a => a.marker_id === activeMarker?.id);
-      setSelectedMarkerInfo(associatedAsset?.configuration || activeMarker?.info || {
-        title: activeMarker?.name || 'Objeto AR',
-        description: 'Elemento didáctico interactivo.'
-      });
+      // El panel NO debe mostrarse automáticamente si no existe un objeto seleccionado o detectado
+      if (!statusState.activeMarkerName && !selectedMarkerInfo) {
+        return;
+      }
+      if (statusState.activeMarkerName && projectData?.markers) {
+        const activeMarker = projectData.markers.find(m => m.name === statusState.activeMarkerName);
+        if (activeMarker) {
+          const associatedAsset = projectData.assets?.find(a => a.marker_id === activeMarker.id);
+          setSelectedMarkerInfo(associatedAsset?.configuration || activeMarker.info || {
+            title: activeMarker.name,
+            description: activeMarker.description || 'Elemento didáctico interactivo.'
+          });
+        }
+      }
       setIsInfoModalOpen(true);
     }
-  }, [isInfoModalOpen, statusState.activeMarkerName, projectData]);
+  }, [isInfoModalOpen, statusState.activeMarkerName, projectData, selectedMarkerInfo]);
 
-  if (isFetchingProject) {
-    return <LoadingScreen message="Cargando configuración de la experiencia AR..." />;
+  // 1. Estado de carga de configuración
+  if (loadState === 'loading') {
+    return <LoadingScreen message="Cargando configuración del proyecto AR..." />;
   }
 
+  // 2. Estado vacío: No hay proyecto cargado
+  if (loadState === 'empty') {
+    return (
+      <div className="ar-empty-overlay">
+        <div className="ar-empty-card">
+          <div className="empty-icon-box">
+            <Layers size={32} color="var(--accent-cyan)" />
+          </div>
+          <h2>No hay un proyecto AR cargado</h2>
+          <p>Selecciona una experiencia desde el catálogo para visualizar los marcadores y modelos 3D.</p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+            onClick={() => navigate('/projects')}
+          >
+            <FolderOpen size={18} />
+            <span>Volver a proyectos</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Estado: Proyecto no encontrado
+  if (loadState === 'not_found') {
+    return (
+      <div className="ar-empty-overlay">
+        <div className="ar-empty-card">
+          <div className="empty-icon-box warning">
+            <AlertTriangle size={32} color="var(--accent-amber)" />
+          </div>
+          <h2>Proyecto no encontrado</h2>
+          <p>No se encontró ninguna experiencia de Realidad Aumentada asociada a "{slug}".</p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+            onClick={() => navigate('/projects')}
+          >
+            <FolderOpen size={18} />
+            <span>Volver a proyectos</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Estado: Error al consultar API
+  if (loadState === 'error') {
+    return (
+      <div className="ar-empty-overlay">
+        <div className="ar-empty-card">
+          <div className="empty-icon-box error">
+            <AlertTriangle size={32} color="var(--accent-rose)" />
+          </div>
+          <h2>No se pudo cargar el proyecto</h2>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+            {projectError || 'Ocurrió un error al comunicarse con el servidor.'}
+          </p>
+          <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ flex: 1 }}
+              onClick={() => navigate('/projects')}
+            >
+              <span>Volver a proyectos</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ flex: 1 }}
+              onClick={() => loadProject()}
+            >
+              <RefreshCw size={18} />
+              <span>Reintentar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. Estado listo: Proyecto válido cargado
   return (
     <div className="ar-viewport-container">
       {/* 1. Visor AR (WebGL Canvas + MindAR Video Stream) */}
@@ -165,9 +303,9 @@ export default function ARExperience() {
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/projects')}
               >
-                <span>Volver al Inicio</span>
+                <span>Volver a proyectos</span>
               </button>
             </div>
           </div>
@@ -195,8 +333,9 @@ export default function ARExperience() {
             <button
               type="button"
               className="ar-round-btn"
-              onClick={() => navigate('/')}
-              aria-label="Volver al menú principal"
+              onClick={() => navigate('/projects')}
+              aria-label="Volver al menú de proyectos"
+              title="Volver a proyectos"
             >
               <ArrowLeft size={20} />
             </button>
@@ -213,6 +352,7 @@ export default function ARExperience() {
               className="ar-round-btn"
               onClick={() => setIsTargetModalOpen(true)}
               aria-label="Ver tarjetas de prueba"
+              title="Ver tarjetas del proyecto"
             >
               <HelpCircle size={20} />
             </button>
@@ -248,7 +388,7 @@ export default function ARExperience() {
       )}
 
       {/* 6. Modal Didáctico del Modelo Tocado */}
-      {isInfoModalOpen && (
+      {isInfoModalOpen && selectedMarkerInfo && (
         <InfoModal
           markerInfo={selectedMarkerInfo}
           onClose={() => setIsInfoModalOpen(false)}
@@ -259,6 +399,7 @@ export default function ARExperience() {
       <TargetPreviewModal
         isOpen={isTargetModalOpen}
         onClose={() => setIsTargetModalOpen(false)}
+        markers={projectData?.markers}
       />
     </div>
   );

@@ -125,12 +125,12 @@ export class MindARManager {
     video.playsInline = true;
     video.autoplay = true;
     video.style.position = 'absolute';
-    video.style.top = '0px';
-    video.style.left = '0px';
-    video.style.zIndex = '-2';
+    video.style.inset = '0px';
+    video.style.zIndex = '1';
     video.style.width = '100%';
     video.style.height = '100%';
     video.style.objectFit = 'cover';
+    video.style.margin = '0px';
 
     this.container.appendChild(video);
 
