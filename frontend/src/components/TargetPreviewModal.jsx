@@ -1,140 +1,362 @@
-import React from 'react';
-import { X, Printer, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Printer, Layers, Eye, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { resolveAssetPath } from '../utils/paths';
+import { apiService } from '../services/api';
 
-export default function TargetPreviewModal({ isOpen, onClose, markers = [] }) {
+export default function TargetPreviewModal({
+  isOpen,
+  onClose,
+  markers = [],
+  project = null,
+  projectId = null
+}) {
   if (!isOpen) return null;
 
+  const [selectedFullImage, setSelectedFullImage] = useState(null);
+  const [fetchedMarkers, setFetchedMarkers] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // 1. Obtención segura y persistente de marcadores
+  useEffect(() => {
+    // Si ya tenemos marcadores con datos pasados por props, no es necesario hacer fetch adicional
+    if (markers && markers.length > 0) {
+      return;
+    }
+
+    if (project?.markers && project.markers.length > 0) {
+      return;
+    }
+
+    // Resolver identificador del proyecto
+    const targetProjectId = projectId || project?.id || project?.slug;
+
+    if (targetProjectId) {
+      setLoading(true);
+      apiService.getMarkersByProject(targetProjectId)
+        .then((data) => {
+          if (data && data.length > 0) {
+            setFetchedMarkers(data);
+          } else {
+            return apiService.getProjectById(targetProjectId).then((proj) => {
+              if (proj?.markers && proj.markers.length > 0) {
+                setFetchedMarkers(proj.markers);
+              }
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn('[TargetPreviewModal] Error al consultar marcadores:', err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    } else {
+      // Caso de apertura global (ej. desde Home sin proyecto seleccionado)
+      setLoading(true);
+      apiService.getProjects()
+        .then(async (projectsList) => {
+          if (projectsList && projectsList.length > 0) {
+            const firstProj = projectsList[0];
+            const fullProj = await apiService.getProjectById(firstProj.id);
+            if (fullProj?.markers && fullProj.markers.length > 0) {
+              setFetchedMarkers(fullProj.markers);
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn('[TargetPreviewModal] Error al obtener proyecto por defecto:', err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [isOpen, markers, project, projectId]);
+
+  // Consolidar lista de marcadores real respetando el proyecto
+  const rawList = (markers && markers.length > 0)
+    ? markers
+    : (project?.markers && project.markers.length > 0)
+      ? project.markers
+      : fetchedMarkers;
+
+  // Ordenar estrictamente por target_index ascendente
+  const activeMarkers = [...rawList].sort((a, b) => {
+    const idxA = a.target_index !== undefined ? a.target_index : (a.targetIndex !== undefined ? a.targetIndex : 0);
+    const idxB = b.target_index !== undefined ? b.target_index : (b.targetIndex !== undefined ? b.targetIndex : 0);
+    return idxA - idxB;
+  });
+
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <Layers size={22} color="var(--accent-cyan)" />
-            <h2>Tarjetas de Seguimiento AR</h2>
+    <>
+      <div className="modal-backdrop" onClick={onClose}>
+        <div
+          className="modal-content"
+          style={{
+            maxWidth: '820px',
+            width: 'calc(100vw - 24px)',
+            maxHeight: 'calc(100dvh - 24px)',
+            overflowY: 'auto',
+            padding: '1.5rem'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header del Modal */}
+          <div className="modal-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <Layers size={22} color="var(--accent-cyan)" />
+              <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Tarjetas de Seguimiento AR</h2>
+            </div>
+            <button
+              type="button"
+              className="modal-close-btn"
+              onClick={onClose}
+              aria-label="Cerrar modal"
+            >
+              <X size={20} />
+            </button>
           </div>
-          <button
-            type="button"
-            className="modal-close-btn"
-            onClick={onClose}
-            aria-label="Cerrar modal"
-          >
-            <X size={20} />
-          </button>
-        </div>
 
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-          Apunta la cámara de tu celular o tablet hacia una de estas tarjetas (puedes imprimirlas o abrirlas en otra pantalla):
-        </p>
-
-        {markers.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem 0' }}>
-            No hay tarjetas configuradas en este proyecto.
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.25rem', marginBottom: '1.25rem' }}>
+            Apunta la cámara de tu celular o tablet hacia una de estas tarjetas (puedes imprimirlas o abrirlas en otra pantalla):
           </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {markers.map((marker, idx) => {
-              const targetIdx = marker.target_index ?? marker.targetIndex ?? idx;
-              const targetImg = marker.target_image || marker.previewImage;
 
-              return (
-                <div
-                  key={marker.id || idx}
-                  style={{
-                    background: 'rgba(0, 0, 0, 0.4)',
-                    border: '1px solid var(--border-glass)',
-                    borderRadius: '16px',
-                    padding: '1rem',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.75rem',
-                    alignItems: 'center'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                      Tarjeta {targetIdx + 1}: {marker.name}
-                    </span>
-                    <span className="badge-pill" style={{ fontSize: '0.7rem' }}>
-                      Target #{targetIdx}
-                    </span>
-                  </div>
+          {/* Estado de Carga */}
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary)' }}>
+              <Loader2 size={32} className="animate-spin-slow" style={{ margin: '0 auto 0.75rem auto', color: 'var(--accent-cyan)' }} />
+              <p style={{ fontSize: '0.9rem' }}>Cargando tarjetas físicas del proyecto...</p>
+            </div>
+          ) : activeMarkers.length === 0 ? (
+            /* Estado Vacío: Se muestra SOLAMENTE si markers.length === 0 */
+            <div style={{ textAlign: 'center', padding: '3rem 1.5rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px dashed var(--border-glass)' }}>
+              <Layers size={40} color="var(--text-muted)" style={{ margin: '0 auto 0.75rem auto' }} />
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', fontWeight: 600, margin: 0 }}>
+                No hay tarjetas configuradas en este proyecto.
+              </p>
+            </div>
+          ) : (
+            /* Cuadrícula Responsive de Tarjetas Físicas:
+               - Móvil: 1 columna
+               - Tablet: 2 columnas
+               - PC: hasta 3 columnas */
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+                gap: '1.1rem',
+                width: '100%'
+              }}
+            >
+              {activeMarkers.map((marker, idx) => {
+                const targetIdx = marker.target_index !== undefined
+                  ? marker.target_index
+                  : (marker.targetIndex !== undefined ? marker.targetIndex : idx);
 
-                  {/* Contenedor visual de la tarjeta con imagen o SVG */}
+                // Campo persistente de imagen en Cloudinary
+                const rawImage = marker.target_image || marker.targetImage;
+                const targetImg = rawImage ? resolveAssetPath(rawImage) : null;
+                const cardName = marker.name || `Tarjeta ${targetIdx + 1}`;
+
+                return (
                   <div
+                    key={marker.id || idx}
                     style={{
-                      width: '100%',
-                      maxWidth: '260px',
-                      aspectRatio: '1/1.3',
-                      background: '#ffffff',
-                      borderRadius: '12px',
-                      padding: '12px',
+                      background: 'rgba(13, 18, 29, 0.75)',
+                      border: '1px solid var(--border-glass, rgba(255, 255, 255, 0.12))',
+                      borderRadius: '18px',
+                      padding: '1rem',
                       display: 'flex',
                       flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-                      border: '3px solid #0f172a'
+                      gap: '0.85rem',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+                      transition: 'transform var(--transition-fast), border-color var(--transition-fast)'
                     }}
                   >
-                    <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#0f172a', fontWeight: 800, fontSize: '0.8rem' }}>
-                      <span>AR STUDIO</span>
-                      <span>{marker.name?.toUpperCase()}</span>
+                    {/* Encabezado de la Tarjeta */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '0.5rem' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {cardName}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: 'var(--accent-cyan)',
+                          backgroundColor: 'rgba(0, 242, 254, 0.12)',
+                          border: '1px solid rgba(0, 242, 254, 0.3)',
+                          borderRadius: '999px',
+                          padding: '0.15rem 0.55rem',
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0
+                        }}
+                      >
+                        Target #{targetIdx}
+                      </span>
                     </div>
 
-                    {targetImg ? (
-                      <img
-                        src={resolveAssetPath(targetImg)}
-                        alt={marker.name}
-                        style={{ width: '100%', maxHeight: '160px', objectFit: 'contain' }}
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                        }}
-                      />
-                    ) : marker.name === 'Motor' ? (
-                      <svg viewBox="0 0 200 200" width="100%" height="160">
-                        <rect width="200" height="200" fill="#ffffff" />
-                        <circle cx="100" cy="100" r="85" fill="#0f172a" />
-                        <circle cx="100" cy="100" r="65" fill="#ffffff" />
-                        <circle cx="100" cy="100" r="45" fill="#0284c7" />
-                        <rect x="90" y="25" width="20" height="150" fill="#0f172a" rx="6" />
-                        <rect x="25" y="90" width="150" height="20" fill="#0f172a" rx="6" />
-                        <circle cx="100" cy="100" r="22" fill="#f59e0b" />
-                        <circle cx="100" cy="100" r="8" fill="#ffffff" />
-                        <rect x="35" y="35" width="18" height="18" fill="#0f172a" />
-                        <polygon points="165,35 150,55 165,55" fill="#0f172a" />
-                        <circle cx="155" cy="155" r="10" fill="#0f172a" />
-                      </svg>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '140px', gap: '0.5rem' }}>
-                        <div style={{ width: '80px', height: '80px', border: '3px dashed #0f172a', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>#{targetIdx}</span>
+                    {/* Contenedor Visual de la Tarjeta (Miniatura) */}
+                    <div
+                      style={{
+                        width: '100%',
+                        aspectRatio: '1 / 1.25',
+                        maxHeight: '260px',
+                        background: '#ffffff',
+                        borderRadius: '12px',
+                        padding: '10px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                        border: '2px solid rgba(15, 23, 42, 0.15)',
+                        overflow: 'hidden',
+                        position: 'relative'
+                      }}
+                    >
+                      {targetImg ? (
+                        <img
+                          src={targetImg}
+                          alt={cardName}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain'
+                          }}
+                        />
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', color: '#64748b' }}>
+                          <ImageIcon size={36} color="#94a3b8" />
+                          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#64748b' }}>
+                            Imagen pendiente
+                          </span>
                         </div>
+                      )}
+                    </div>
+
+                    {/* Acción: Ver imagen completa en Lightbox */}
+                    {targetImg ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{
+                          width: '100%',
+                          minHeight: '44px',
+                          fontSize: '0.85rem',
+                          justifyContent: 'center',
+                          gap: '0.4rem',
+                          marginTop: 'auto'
+                        }}
+                        onClick={() => setSelectedFullImage({
+                          url: targetImg,
+                          name: cardName,
+                          targetIdx
+                        })}
+                      >
+                        <Eye size={16} />
+                        <span>Ver imagen completa</span>
+                      </button>
+                    ) : (
+                      <div style={{ height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        Sin imagen física asignada
                       </div>
                     )}
-
-                    <div style={{ color: '#0f172a', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '1px' }}>
-                      TARJETA EDUCATIVA
-                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
 
-        {markers.length > 0 && (
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ width: '100%', marginTop: '0.5rem' }}
-            onClick={() => window.print()}
-          >
-            <Printer size={18} />
-            <span>Imprimir Tarjetas</span>
-          </button>
-        )}
+          {/* Botón de Impresión */}
+          {activeMarkers.length > 0 && (
+            <div style={{ marginTop: '1.25rem', display: 'flex', gap: '0.75rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ width: '100%', minHeight: '44px', justifyContent: 'center', gap: '0.5rem' }}
+                onClick={() => window.print()}
+              >
+                <Printer size={18} />
+                <span>Imprimir Tarjetas</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Lightbox / Modal para Ver Imagen Completa */}
+      {selectedFullImage && (
+        <div
+          className="modal-backdrop"
+          style={{ zIndex: 1200, background: 'rgba(0, 0, 0, 0.92)' }}
+          onClick={() => setSelectedFullImage(null)}
+        >
+          <div
+            style={{
+              position: 'relative',
+              maxWidth: '92vw',
+              maxHeight: '92vh',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '0.85rem',
+              background: '#0d121d',
+              border: '1px solid var(--border-glass)',
+              borderRadius: '20px',
+              padding: '1.25rem',
+              boxShadow: '0 8px 40px rgba(0, 0, 0, 0.8)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: '1rem' }}>
+              <div>
+                <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '1.05rem' }}>
+                  {selectedFullImage.name}
+                </span>
+                <span style={{ marginLeft: '0.5rem', fontSize: '0.78rem', color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                  (Target #{selectedFullImage.targetIdx})
+                </span>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                style={{ minHeight: '44px', minWidth: '44px' }}
+                onClick={() => setSelectedFullImage(null)}
+                aria-label="Cerrar imagen completa"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div
+              style={{
+                width: '100%',
+                maxHeight: '70vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#ffffff',
+                borderRadius: '12px',
+                padding: '12px',
+                overflow: 'hidden'
+              }}
+            >
+              <img
+                src={selectedFullImage.url}
+                alt={selectedFullImage.name}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '68vh',
+                  objectFit: 'contain'
+                }}
+              />
+            </div>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', textAlign: 'center', margin: 0 }}>
+              💡 Puedes apuntar la cámara de tu celular hacia esta pantalla para escanear y probar el reconocimiento AR.
+            </p>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

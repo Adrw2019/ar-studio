@@ -55,7 +55,7 @@ exports.getAllProjects = async (req, res, next) => {
 exports.getProjectById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const projRes = await db.query('SELECT * FROM projects WHERE id = $1', [id]);
+    const projRes = await db.query('SELECT * FROM projects WHERE id = $1 OR slug = $1', [id]);
 
     if (projRes.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Proyecto no encontrado' });
@@ -65,17 +65,17 @@ exports.getProjectById = async (req, res, next) => {
 
     const markersRes = await db.query(
       'SELECT * FROM markers WHERE project_id = $1 ORDER BY target_index ASC',
-      [id]
+      [project.id]
     );
 
     const assetsRes = await db.query(
       'SELECT * FROM assets WHERE project_id = $1 ORDER BY created_at ASC',
-      [id]
+      [project.id]
     );
 
     const interRes = await db.query(
       'SELECT * FROM interactions WHERE project_id = $1 ORDER BY created_at ASC',
-      [id]
+      [project.id]
     );
 
     project.category = project.category || 'STEM';

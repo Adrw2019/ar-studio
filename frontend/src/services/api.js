@@ -82,12 +82,32 @@ export const apiService = {
    */
   async getProjectBySlug(slug) {
     try {
-      const res = await fetch(`${API_BASE_URL}/projects/slug/${slug}`);
+      let res = await fetch(`${API_BASE_URL}/projects/slug/${slug}`);
+      if (!res.ok && res.status === 404) {
+        res = await fetch(`${API_BASE_URL}/projects/public/${slug}`);
+      }
+      if (!res.ok && res.status === 404) {
+        res = await fetch(`${API_BASE_URL}/projects/${slug}`);
+      }
       const data = await parseResponse(res);
       return data.data || null;
     } catch (err) {
       console.warn(`Error al obtener proyecto ${slug}:`, err.message);
       return null;
+    }
+  },
+
+  /**
+   * Obtener marcadores físicos (tarjetas) de un proyecto
+   */
+  async getMarkersByProject(projectId) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/markers/project/${projectId}`);
+      const data = await parseResponse(res);
+      return data.data || [];
+    } catch (err) {
+      console.warn(`Error al obtener marcadores del proyecto ${projectId}:`, err.message);
+      return [];
     }
   },
 

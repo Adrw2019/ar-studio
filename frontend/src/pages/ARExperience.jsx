@@ -102,8 +102,22 @@ export default function ARExperience() {
     setLoadState('loading');
     setProjectError(null);
     try {
-      const project = await apiService.getProjectBySlug(slug);
+      let project = await apiService.getProjectBySlug(slug);
+      if (!project || !project.id) {
+        project = await apiService.getProjectById(slug);
+      }
       if (project && project.id) {
+        // Asegurar que markers esté presente si la consulta principal no los incluyó
+        if (!project.markers || project.markers.length === 0) {
+          try {
+            const markers = await apiService.getMarkersByProject(project.id);
+            if (markers && markers.length > 0) {
+              project.markers = markers;
+            }
+          } catch (mErr) {
+            console.warn('[ARExperience] Error al recuperar markers de respaldo:', mErr);
+          }
+        }
         setProjectData(project);
         setLoadState('ready');
       } else {
@@ -527,6 +541,8 @@ export default function ARExperience() {
           isOpen={isTargetModalOpen}
           onClose={() => setIsTargetModalOpen(false)}
           markers={markersList}
+          project={projectData}
+          projectId={projectData?.id}
         />
       </div>
     );
@@ -675,6 +691,8 @@ export default function ARExperience() {
         isOpen={isTargetModalOpen}
         onClose={() => setIsTargetModalOpen(false)}
         markers={markersList}
+        project={projectData}
+        projectId={projectData?.id}
       />
     </div>
   );

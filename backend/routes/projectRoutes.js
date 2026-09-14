@@ -4,8 +4,9 @@ const projectController = require('../controllers/projectController');
 const upload = require('../middleware/uploadMiddleware');
 
 router.get('/', projectController.getAllProjects);
-router.get('/:id', projectController.getProjectById);
 router.get('/slug/:slug', projectController.getProjectBySlug);
+router.get('/public/:slug', projectController.getProjectBySlug);
+router.get('/:id', projectController.getProjectById);
 router.post('/', projectController.createProject);
 router.put('/:id', projectController.updateProject);
 router.delete('/:id', projectController.deleteProject);
