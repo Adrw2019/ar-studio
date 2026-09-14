@@ -202,5 +202,28 @@ export const apiService = {
       console.error(`Error al compilar targets para proyecto ${id}:`, err.message);
       throw err;
     }
+  },
+
+  /**
+   * Subir archivo .mind ya compilado directamente en el navegador (liviano, sin timeout de Netlify)
+   */
+  async uploadCompiledMind(id, mindBlob) {
+    try {
+      const formData = new FormData();
+      formData.append('file', mindBlob, `${id}-targets.mind`);
+
+      const res = await fetch(`${API_BASE_URL}/projects/${id}/upload-mind`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await parseResponse(res);
+      if (!data.success) {
+        throw new Error(data.error || 'Error al guardar archivo .mind compilado');
+      }
+      return data;
+    } catch (err) {
+      console.error(`Error al subir targets.mind para proyecto ${id}:`, err.message);
+      throw err;
+    }
   }
 };

@@ -10,6 +10,7 @@ import PublishModal from '../components/PublishModal';
 import UploadAssetModal from '../components/UploadAssetModal';
 import ThemeModal from '../components/ThemeModal';
 import { apiService } from '../../services/api';
+import { compileMindTargetsInBrowser } from '../../services/mindarCompiler';
 import '../styles/editor.css';
 
 export default function StudioEditor() {
@@ -121,9 +122,10 @@ export default function StudioEditor() {
 
   // Estado de compilación de targets
   const [isCompiling, setIsCompiling] = useState(false);
+  const [compileProgress, setCompileProgress] = useState(0);
   const [showErrorDetailModal, setShowErrorDetailModal] = useState(false);
 
-  // Compilar targets físicos con MindAR
+  // Compilar targets físicos con MindAR directamente en el navegador
   const handleCompileTargets = async () => {
     if (!project || !project.id) return;
 
@@ -138,7 +140,18 @@ export default function StudioEditor() {
       return;
     }
 
+    const markersWithImage = (project.markers || []).filter(m => m.target_image && m.target_image.trim());
+    if (markersWithImage.length === 0) {
+      setProject(prev => ({
+        ...prev,
+        tracking_status: 'error',
+        tracking_error: 'Ninguna tarjeta tiene imagen asignada. Sube la imagen física de la tarjeta antes de compilar.'
+      }));
+      return;
+    }
+
     setIsCompiling(true);
+    setCompileProgress(5);
     const compilingState = { ...project, tracking_status: 'compiling', tracking_error: null };
     setProject(compilingState);
 
@@ -146,21 +159,29 @@ export default function StudioEditor() {
       // 1. Guardar primero el proyecto actual
       await apiService.updateProject(project.id, compilingState);
 
-      // 2. Ejecutar compilación de MindAR
-      const res = await apiService.compileProjectTargets(project.id);
+      // 2. Ejecutar compilación de MindAR directamente en el navegador con aceleración cliente
+      const { blob } = await compileMindTargetsInBrowser(project.markers, (progress) => {
+        setCompileProgress(progress);
+      });
+
+      setCompileProgress(95);
+
+      // 3. Subir el binario .mind ya compilado al backend liviano -> Cloudinary
+      const res = await apiService.uploadCompiledMind(project.id, blob);
+
       if (res && res.success) {
+        setCompileProgress(100);
         setProject(prev => ({
           ...prev,
           mind_file_url: res.mind_file_url,
           tracking_status: 'ready',
-          tracking_error: null,
-          markers: res.markers || prev.markers
+          tracking_error: null
         }));
       } else {
-        throw new Error(res?.error || res?.tracking_error || 'Error al compilar targets.');
+        throw new Error(res?.error || res?.tracking_error || 'Error al guardar el archivo .mind compilado.');
       }
     } catch (err) {
-      console.error('[StudioEditor] Error al compilar tarjetas:', err);
+      console.error('[StudioEditor] Error al compilar tarjetas en navegador:', err);
       setProject(prev => ({
         ...prev,
         tracking_status: 'error',
@@ -168,6 +189,7 @@ export default function StudioEditor() {
       }));
     } finally {
       setIsCompiling(false);
+      setTimeout(() => setCompileProgress(0), 1500);
     }
   };
 
@@ -402,7 +424,7 @@ export default function StudioEditor() {
               {project.tracking_status === 'ready'
                 ? 'Tarjetas listas para AR'
                 : (project.tracking_status === 'compiling' || isCompiling)
-                ? 'Preparando reconocimiento de imágenes...'
+                ? `Preparando reconocimiento de imágenes... ${compileProgress > 0 ? `(${compileProgress}%)` : ''}`
                 : project.tracking_status === 'error'
                 ? 'No se pudieron preparar las tarjetas'
                 : 'Las tarjetas aún no están preparadas'}
@@ -411,7 +433,7 @@ export default function StudioEditor() {
               {project.tracking_status === 'ready'
                 ? `Archivo de seguimiento visual compilado y listo para la cámara.`
                 : (project.tracking_status === 'compiling' || isCompiling)
-                ? 'Extrayendo características visuales con MindAR (esto puede tardar unos segundos)...'
+                ? `Extrayendo características visuales con MindAR en el navegador ${compileProgress > 0 ? `(${compileProgress}%)` : ''}...`
                 : project.tracking_status === 'error'
                 ? (project.tracking_error || 'Error al procesar las imágenes de las tarjetas.')
                 : 'Debes compilar las imágenes para que la cámara del estudiante las reconozca.'}
@@ -449,7 +471,7 @@ export default function StudioEditor() {
             {isCompiling || project.tracking_status === 'compiling' ? (
               <>
                 <RefreshCw size={14} className="animate-spin-slow" />
-                <span>Preparando...</span>
+                <span>{compileProgress > 0 ? `Compilando ${compileProgress}%` : 'Preparando...'}</span>
               </>
             ) : project.tracking_status === 'ready' ? (
               <>

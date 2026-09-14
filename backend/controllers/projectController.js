@@ -1,6 +1,5 @@
 const db = require('../config/db');
 const storageService = require('../services/storageService');
-const mindarCompilerService = require('../services/mindarCompilerService');
 
 /**
  * AR Studio - Project Controller
@@ -488,8 +487,18 @@ exports.duplicateProject = async (req, res, next) => {
   }
 };
 
-// 8. Compilar targets.mind para un proyecto específico
+// 8. Ruta legacy de compilación (informa redirección al navegador para evitar timeout en Netlify)
 exports.compileProjectTargets = async (req, res, next) => {
+  return res.status(400).json({
+    success: false,
+    tracking_status: 'error',
+    tracking_error: 'La compilación pesada de reconocimiento debe realizarse en el navegador del cliente para evitar el timeout de 30s de Netlify. Utilice /upload-mind.',
+    error: 'La compilación se realiza en el navegador del cliente.'
+  });
+};
+
+// 9. Subir archivo .mind precompilado en el navegador (Liviano, sin timeout de Netlify)
+exports.uploadCompiledMind = async (req, res, next) => {
   const { id } = req.params;
   try {
     const projRes = await db.query('SELECT * FROM projects WHERE id = $1', [id]);
@@ -498,78 +507,17 @@ exports.compileProjectTargets = async (req, res, next) => {
     }
     const project = projRes.rows[0];
 
-    const markersRes = await db.query(
-      'SELECT * FROM markers WHERE project_id = $1 ORDER BY target_index ASC',
-      [id]
-    );
-    const markers = markersRes.rows;
-
-    // 1. Validar tarjetas registradas
-    if (!markers || markers.length === 0) {
-      return res.status(400).json({
-        success: false,
-        tracking_status: 'error',
-        tracking_error: 'El proyecto no tiene tarjetas registradas. Agrega al menos una tarjeta física en el Studio.',
-        error: 'El proyecto no tiene tarjetas registradas'
-      });
+    const file = req.file;
+    if (!file || !file.buffer) {
+      return res.status(400).json({ success: false, error: 'No se recibió el archivo .mind compilado' });
     }
 
-    // 2. Validar que las tarjetas tengan imagen y no sean URLs blob temporales
-    const blobMarker = markers.find(m => m.target_image && m.target_image.startsWith('blob:'));
-    if (blobMarker) {
-      return res.status(400).json({
-        success: false,
-        tracking_status: 'error',
-        tracking_error: 'La imagen de esta tarjeta todavía no está almacenada correctamente. Vuelve a subirla.',
-        error: 'La imagen de esta tarjeta todavía no está almacenada correctamente. Vuelve a subirla.'
-      });
-    }
-
-    const markersWithImage = markers.filter(m => m.target_image && m.target_image.trim());
-    if (markersWithImage.length === 0) {
-      return res.status(400).json({
-        success: false,
-        tracking_status: 'error',
-        tracking_error: 'Ninguna tarjeta tiene imagen asignada. Sube la imagen física de la tarjeta antes de compilar.',
-        error: 'Ninguna tarjeta tiene imagen asignada'
-      });
-    }
-
-    // Validar que todas las imágenes sean persistentes (https://, http://, /uploads/, /markers/)
-    const nonPersistentMarker = markersWithImage.find(m =>
-      !m.target_image.startsWith('https://') &&
-      !m.target_image.startsWith('http://') &&
-      !m.target_image.startsWith('/uploads/') &&
-      !m.target_image.startsWith('/markers/')
-    );
-    if (nonPersistentMarker) {
-      return res.status(400).json({
-        success: false,
-        tracking_status: 'error',
-        tracking_error: 'La imagen de esta tarjeta todavía no está almacenada correctamente. Vuelve a subirla.',
-        error: 'La imagen de esta tarjeta todavía no está almacenada correctamente. Vuelve a subirla.'
-      });
-    }
-
-    // 3. Actualizar estado a 'compiling'
-    await db.query(
-      'UPDATE projects SET tracking_status = $1, tracking_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      ['compiling', id]
-    );
-
-    console.log(`[projectController] Iniciando compilación de targets para proyecto ${id} (${markers.length} tarjetas)...`);
-
-    // 4. Compilar con MindAR
-    const { buffer, targetsCount, qualityReport } = await mindarCompilerService.compileMarkers(
-      id,
-      markers
-    );
-
-    // 5. Guardar archivo .mind mediante storageService (Cloudinary RAW / local)
     const filename = `${project.id}-targets.mind`;
+
+    // Subir archivo .mind directamente mediante storageService (Cloudinary RAW / local)
     const saved = await storageService.saveFile({
       filename,
-      buffer,
+      buffer: file.buffer,
       mimeType: 'application/octet-stream',
       projectId: project.id,
       category: 'tracking'
@@ -577,55 +525,38 @@ exports.compileProjectTargets = async (req, res, next) => {
 
     const finalMindUrl = saved.secure_url || saved.url;
 
-    // 6. Actualizar proyecto en PostgreSQL
+    // Actualizar proyecto en PostgreSQL Neon
     await db.query(
-      'UPDATE projects SET mind_file_url = $1, tracking_status = $2, tracking_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-      [finalMindUrl, 'ready', id]
+      `UPDATE projects
+       SET mind_file_url = $1,
+           tracking_status = 'ready',
+           tracking_error = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [finalMindUrl, id]
     );
-
-    // Actualizar calidad en markers
-    if (Array.isArray(qualityReport)) {
-      for (const qr of qualityReport) {
-        if (qr.marker_id) {
-          await db.query(
-            'UPDATE markers SET quality = $1, quality_score = $2 WHERE id = $3 AND project_id = $4',
-            [qr.quality, qr.score, qr.marker_id, id]
-          );
-        } else if (qr.target_index !== undefined) {
-          await db.query(
-            'UPDATE markers SET quality = $1, quality_score = $2 WHERE target_index = $3 AND project_id = $4',
-            [qr.quality, qr.score, qr.target_index, id]
-          );
-        }
-      }
-    }
 
     return res.status(200).json({
       success: true,
       project_id: project.id,
       tracking_status: 'ready',
       mind_file_url: finalMindUrl,
-      targets_count: targetsCount,
-      quality_report: qualityReport,
-      message: 'Archivo targets.mind compilado exitosamente para este proyecto'
+      message: 'Archivo targets.mind subido y registrado exitosamente'
     });
   } catch (err) {
-    console.error(`[projectController] Error al compilar targets para ${id}:`, err);
-
+    console.error(`[projectController] Error en uploadCompiledMind para ${id}:`, err);
     try {
       await db.query(
         'UPDATE projects SET tracking_status = $1, tracking_error = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
         ['error', err.message, id]
       );
-    } catch (dbErr) {
-      console.error('[projectController] Error registrando fallo en BD:', dbErr.message);
-    }
+    } catch (dbErr) {}
 
     return res.status(400).json({
       success: false,
       project_id: id,
       tracking_status: 'error',
-      tracking_error: err.message || 'Error al compilar targets.mind',
+      tracking_error: err.message || 'Error al guardar archivo .mind',
       error: err.message
     });
   }

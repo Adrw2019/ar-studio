@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const projectController = require('../controllers/projectController');
+const upload = require('../middleware/uploadMiddleware');
 
 router.get('/', projectController.getAllProjects);
 router.get('/:id', projectController.getProjectById);
@@ -10,5 +11,6 @@ router.put('/:id', projectController.updateProject);
 router.delete('/:id', projectController.deleteProject);
 router.post('/:id/duplicate', projectController.duplicateProject);
 router.post('/:id/compile-targets', projectController.compileProjectTargets);
+router.post('/:id/upload-mind', upload.single('file'), projectController.uploadCompiledMind);
 
 module.exports = router;
