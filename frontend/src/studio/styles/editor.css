@@ -622,8 +622,39 @@
   resize: vertical;
 }
 
-.form-input:focus, .form-textarea:focus, .form-select:focus {
+.form-input:focus, .form-textarea:focus, .form-select:focus, select:focus {
   border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(0, 242, 254, 0.25);
+}
+
+.form-select option,
+select option {
+  background-color: #ffffff;
+  color: #111827;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+}
+
+.form-select option:hover,
+.form-select option:focus,
+select option:hover,
+select option:focus {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.form-select option:checked,
+select option:checked {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.form-select option:disabled,
+select option:disabled {
+  color: #94a3b8;
+  background-color: #f8fafc;
 }
 
 /* 3D Viewport Controls HUD Overlay */

@@ -232,3 +232,20 @@ a {
 .animate-spin-slow {
   animation: spin-slow 12s linear infinite;
 }
+
+/* ==========================================================================
+   GLOBAL FORM ELEMENTS & NATIVE SELECT HIGH CONTRAST
+   ========================================================================== */
+select {
+  color: #f8fafc;
+}
+
+select option {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+select option:checked {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
