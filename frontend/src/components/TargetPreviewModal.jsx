@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Printer, Layers, Eye, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { resolveAssetPath } from '../utils/paths';
 import { apiService } from '../services/api';
@@ -10,67 +10,120 @@ export default function TargetPreviewModal({
   project = null,
   projectId = null
 }) {
-  if (!isOpen) return null;
-
   const [selectedFullImage, setSelectedFullImage] = useState(null);
   const [fetchedMarkers, setFetchedMarkers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
+  // Ref to track what we've already fetched for, preventing re-fetches
+  const lastFetchKey = useRef(null);
 
-  // 1. Obtención segura y persistente de marcadores
+  // Obtención segura de marcadores — runs only when the modal opens or the real project changes
   useEffect(() => {
-    // Si ya tenemos marcadores con datos pasados por props, no es necesario hacer fetch adicional
-    if (markers && markers.length > 0) {
+    if (!isOpen) {
       return;
     }
 
-    if (project?.markers && project.markers.length > 0) {
+    // If markers were passed directly via props, use them — no fetch needed
+    const propsMarkers = (markers && markers.length > 0) ? markers : null;
+    const projectMarkers = (project?.markers && project.markers.length > 0) ? project.markers : null;
+
+    if (propsMarkers || projectMarkers) {
+      console.log('[TargetPreview] Usando marcadores de props/project, sin fetch.', {
+        propsCount: propsMarkers?.length || 0,
+        projectMarkersCount: projectMarkers?.length || 0
+      });
+      setLoading(false);
+      setFetchError(null);
       return;
     }
 
-    // Resolver identificador del proyecto
-    const targetProjectId = projectId || project?.id || project?.slug;
+    // Resolve project identifier
+    const targetProjectId = projectId || project?.id || project?.slug || null;
 
-    if (targetProjectId) {
+    console.log('[TargetPreview] project:', project);
+    console.log('[TargetPreview] projectId:', projectId);
+    console.log('[TargetPreview] markers recibidos:', markers);
+    console.log('[TargetPreview] targetProjectId resuelto:', targetProjectId);
+
+    // Build a stable key for this fetch to avoid re-fetching
+    const fetchKey = targetProjectId || '__global__';
+    if (lastFetchKey.current === fetchKey && fetchedMarkers.length > 0) {
+      console.log('[TargetPreview] Ya se consultaron marcadores para:', fetchKey);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function fetchMarkers() {
       setLoading(true);
-      apiService.getMarkersByProject(targetProjectId)
-        .then((data) => {
-          if (data && data.length > 0) {
-            setFetchedMarkers(data);
-          } else {
-            return apiService.getProjectById(targetProjectId).then((proj) => {
-              if (proj?.markers && proj.markers.length > 0) {
-                setFetchedMarkers(proj.markers);
-              }
-            });
-          }
-        })
-        .catch((err) => {
-          console.warn('[TargetPreviewModal] Error al consultar marcadores:', err);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
-      // Caso de apertura global (ej. desde Home sin proyecto seleccionado)
-      setLoading(true);
-      apiService.getProjects()
-        .then(async (projectsList) => {
-          if (projectsList && projectsList.length > 0) {
-            const firstProj = projectsList[0];
-            const fullProj = await apiService.getProjectById(firstProj.id);
-            if (fullProj?.markers && fullProj.markers.length > 0) {
-              setFetchedMarkers(fullProj.markers);
+      setFetchError(null);
+
+      try {
+        let markerList = [];
+
+        if (targetProjectId) {
+          // 1. Try dedicated markers endpoint
+          console.log('[TargetPreview] Consultando GET /api/markers/project/' + targetProjectId);
+          const markersData = await apiService.getMarkersByProject(targetProjectId);
+          markerList = Array.isArray(markersData) ? markersData
+            : Array.isArray(markersData?.markers) ? markersData.markers
+            : [];
+
+          console.log('[TargetPreview] Respuesta getMarkersByProject:', markersData);
+
+          // 2. Fallback: get project by ID and extract .markers
+          if (markerList.length === 0) {
+            console.log('[TargetPreview] Sin marcadores directos, fallback a getProjectById');
+            const fullProject = await apiService.getProjectById(targetProjectId);
+            console.log('[TargetPreview] Respuesta getProjectById:', fullProject);
+            if (fullProject?.markers && Array.isArray(fullProject.markers)) {
+              markerList = fullProject.markers;
             }
           }
-        })
-        .catch((err) => {
-          console.warn('[TargetPreviewModal] Error al obtener proyecto por defecto:', err);
-        })
-        .finally(() => {
+        } else {
+          // No project specified — global mode (e.g. Home page)
+          console.log('[TargetPreview] Sin projectId, consultando primer proyecto disponible');
+          const projectsList = await apiService.getProjects();
+          if (projectsList && projectsList.length > 0) {
+            const firstProj = projectsList[0];
+            console.log('[TargetPreview] Primer proyecto:', firstProj.id, firstProj.name);
+            const fullProj = await apiService.getProjectById(firstProj.id);
+            if (fullProj?.markers && Array.isArray(fullProj.markers)) {
+              markerList = fullProj.markers;
+            }
+          }
+        }
+
+        if (!controller.signal.aborted) {
+          console.log('[TargetPreview] Marcadores resueltos:', markerList.length, markerList);
+          setFetchedMarkers(markerList);
+          lastFetchKey.current = fetchKey;
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          console.error('[TargetPreview] Error cargando tarjetas:', err);
+          setFetchedMarkers([]);
+          setFetchError(err.message || 'Error al cargar tarjetas');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
           setLoading(false);
-        });
+        }
+      }
     }
-  }, [isOpen, markers, project, projectId]);
+
+    fetchMarkers();
+
+    return () => {
+      controller.abort();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, projectId, project?.id]);
+  // Note: `markers` is intentionally excluded — its array reference changes every render
+  // and would cause an infinite loop. We read it directly in the render phase instead.
+
+  // Early return AFTER all hooks
+  if (!isOpen) return null;
 
   // Consolidar lista de marcadores real respetando el proyecto
   const rawList = (markers && markers.length > 0)
