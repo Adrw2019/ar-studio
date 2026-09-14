@@ -1,20 +1,31 @@
 const db = require('../config/db');
+const storageService = require('../services/storageService');
+const fs = require('fs');
+
+/**
+ * AR Studio - Asset Controller
+ * Persistencia de metadatos de modelos 3D, imágenes, video y audio en PostgreSQL Neon.
+ * Los archivos binarios residen en Cloudinary.
+ */
 
 exports.getAssetsByProject = async (req, res, next) => {
   try {
     const { projectId } = req.params;
-    if (db.isDbConnected()) {
-      const result = await db.query('SELECT * FROM assets WHERE project_id = $1', [projectId]);
-      return res.status(200).json({ success: true, data: result.rows });
-    }
-    return res.status(200).json({ success: true, data: [] });
+    const result = await db.query(
+      'SELECT * FROM assets WHERE project_id = $1 ORDER BY created_at ASC',
+      [projectId]
+    );
+
+    const parsed = result.rows.map(a => ({
+      ...a,
+      configuration: typeof a.configuration === 'string' ? JSON.parse(a.configuration) : (a.configuration || {})
+    }));
+
+    return res.status(200).json({ success: true, data: parsed });
   } catch (error) {
     next(error);
   }
 };
-
-const storageService = require('../services/storageService');
-const fs = require('fs');
 
 exports.uploadAsset = async (req, res, next) => {
   try {
@@ -24,8 +35,9 @@ exports.uploadAsset = async (req, res, next) => {
 
     const buffer = fs.readFileSync(req.file.path);
     const projectId = req.body.projectId || req.body.project_id;
-    const category = req.body.category || 'cards';
+    const category = req.body.category || 'models';
 
+    // Subir a través de storageService (Cloudinary / Local)
     const saved = await storageService.saveFile({
       filename: req.file.originalname,
       buffer,
@@ -34,7 +46,7 @@ exports.uploadAsset = async (req, res, next) => {
       category
     });
 
-    // Si se almacenó en Cloudinary, limpiar el archivo temporal de disco local
+    // Limpiar archivo temporal si se guardó en Cloudinary
     if (saved.provider === 'cloudinary') {
       try {
         fs.unlinkSync(req.file.path);
@@ -60,35 +72,44 @@ exports.uploadAsset = async (req, res, next) => {
 
 exports.createAsset = async (req, res, next) => {
   try {
-    const { project_id, marker_id, type, file_url, position_x, position_y, position_z, rotation_x, rotation_y, rotation_z, scale_x, scale_y, scale_z, configuration } = req.body;
-    const newAsset = {
-      id: `asset-${Date.now()}`,
-      project_id,
-      marker_id,
-      type: type || 'model3d',
-      file_url: file_url || '/models/motor.glb',
-      position_x: position_x || 0,
-      position_y: position_y || 0,
-      position_z: position_z || 0,
-      rotation_x: rotation_x || 0,
-      rotation_y: rotation_y || 0,
-      rotation_z: rotation_z || 0,
-      scale_x: scale_x || 0.75,
-      scale_y: scale_y || 0.75,
-      scale_z: scale_z || 0.75,
-      configuration: configuration || {}
-    };
+    const {
+      project_id, marker_id, type, file_url,
+      position_x, position_y, position_z,
+      rotation_x, rotation_y, rotation_z,
+      scale_x, scale_y, scale_z, configuration
+    } = req.body;
 
-    if (db.isDbConnected()) {
-      const result = await db.query(
-        `INSERT INTO assets (project_id, marker_id, type, file_url, position_x, position_y, position_z, rotation_x, rotation_y, rotation_z, scale_x, scale_y, scale_z, configuration)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
-        [project_id, marker_id, newAsset.type, newAsset.file_url, newAsset.position_x, newAsset.position_y, newAsset.position_z, newAsset.rotation_x, newAsset.rotation_y, newAsset.rotation_z, newAsset.scale_x, newAsset.scale_y, newAsset.scale_z, JSON.stringify(newAsset.configuration)]
-      );
-      return res.status(201).json({ success: true, data: result.rows[0] });
+    const newId = req.body.id || `asset-${Date.now()}`;
+
+    const result = await db.query(
+      `INSERT INTO assets (id, project_id, marker_id, type, file_url, position_x, position_y, position_z, rotation_x, rotation_y, rotation_z, scale_x, scale_y, scale_z, configuration, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [
+        newId, project_id, marker_id || null, type || 'model3d', file_url || '',
+        position_x || 0, position_y || 0, position_z || 0,
+        rotation_x || 0, rotation_y || 0, rotation_z || 0,
+        scale_x || 1, scale_y || 1, scale_z || 1,
+        JSON.stringify(configuration || {})
+      ]
+    );
+
+    const created = result.rows[0];
+    if (typeof created.configuration === 'string') {
+      try { created.configuration = JSON.parse(created.configuration); } catch (e) {}
     }
 
-    return res.status(201).json({ success: true, data: newAsset });
+    return res.status(201).json({ success: true, data: created });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteAsset = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await db.query('DELETE FROM assets WHERE id = $1', [id]);
+    return res.status(200).json({ success: true, message: 'Asset eliminado' });
   } catch (error) {
     next(error);
   }
