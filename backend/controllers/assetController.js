@@ -33,7 +33,11 @@ exports.uploadAsset = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'No se ha subido ningún archivo' });
     }
 
-    const buffer = fs.readFileSync(req.file.path);
+    const buffer = req.file.buffer || (req.file.path && fs.existsSync(req.file.path) ? fs.readFileSync(req.file.path) : null);
+    if (!buffer) {
+      return res.status(400).json({ success: false, error: 'No se pudo leer el contenido del archivo' });
+    }
+
     const projectId = req.body.projectId || req.body.project_id;
     const category = req.body.category || 'models';
 
@@ -46,8 +50,8 @@ exports.uploadAsset = async (req, res, next) => {
       category
     });
 
-    // Limpiar archivo temporal si se guardó en Cloudinary
-    if (saved.provider === 'cloudinary') {
+    // Limpiar archivo temporal si provino de disco y se guardó en Cloudinary
+    if (saved.provider === 'cloudinary' && req.file.path && fs.existsSync(req.file.path)) {
       try {
         fs.unlinkSync(req.file.path);
       } catch (e) {}
@@ -81,12 +85,14 @@ exports.createAsset = async (req, res, next) => {
 
     const newId = req.body.id || `asset-${Date.now()}`;
 
+    const cleanFileUrl = (file_url && !file_url.startsWith('blob:')) ? file_url : '';
+
     const result = await db.query(
       `INSERT INTO assets (id, project_id, marker_id, type, file_url, position_x, position_y, position_z, rotation_x, rotation_y, rotation_z, scale_x, scale_y, scale_z, configuration, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING *`,
       [
-        newId, project_id, marker_id || null, type || 'model3d', file_url || '',
+        newId, project_id, marker_id || null, type || 'model3d', cleanFileUrl,
         position_x || 0, position_y || 0, position_z || 0,
         rotation_x || 0, rotation_y || 0, rotation_z || 0,
         scale_x || 1, scale_y || 1, scale_z || 1,

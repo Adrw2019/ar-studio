@@ -66,6 +66,11 @@ class MindARCompilerService {
 
     const trimmed = imageUrl.trim();
 
+    // 0. Rechazar inmediatamente URLs blob temporales
+    if (trimmed.startsWith('blob:')) {
+      throw new Error('La imagen de esta tarjeta todavía no está almacenada correctamente. Vuelve a subirla.');
+    }
+
     // 1. Data URL Base64
     if (trimmed.startsWith('data:image/')) {
       const parts = trimmed.split(',');

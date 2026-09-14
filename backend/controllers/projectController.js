@@ -261,20 +261,26 @@ exports.updateProject = async (req, res, next) => {
         const mId = (m.id && !m.id.startsWith('temp-')) ? m.id : `marker-${Date.now()}-${idx}`;
         const targetIndex = m.target_index !== undefined ? parseInt(m.target_index, 10) : idx;
 
+        // NUNCA persistir URLs blob en PostgreSQL Neon
+        let targetImage = m.target_image || '';
+        if (targetImage.startsWith('blob:')) {
+          targetImage = '';
+        }
+
         const updateRes = await db.query(
           `UPDATE markers
            SET name = $1, target_image = $2, target_index = $3, description = $4,
                quality = COALESCE($5, quality), quality_score = COALESCE($6, quality_score),
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $7 AND project_id = $8`,
-          [m.name || `Tarjeta ${idx + 1}`, m.target_image || '', targetIndex, m.description || '', m.quality, m.quality_score, mId, id]
+          [m.name || `Tarjeta ${idx + 1}`, targetImage, targetIndex, m.description || '', m.quality, m.quality_score, mId, id]
         );
 
         if (updateRes.rowCount === 0) {
           await db.query(
             `INSERT INTO markers (id, project_id, name, target_image, target_index, description, quality, quality_score, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-            [mId, id, m.name || `Tarjeta ${idx + 1}`, m.target_image || '', targetIndex, m.description || '', m.quality, m.quality_score]
+            [mId, id, m.name || `Tarjeta ${idx + 1}`, targetImage, targetIndex, m.description || '', m.quality, m.quality_score]
           );
         }
       }
@@ -286,6 +292,12 @@ exports.updateProject = async (req, res, next) => {
         const a = assets[idx];
         const aId = (a.id && !a.id.startsWith('temp-')) ? a.id : `asset-${Date.now()}-${idx}`;
 
+        // NUNCA persistir URLs blob en PostgreSQL Neon
+        let fileUrl = a.file_url || '';
+        if (fileUrl.startsWith('blob:')) {
+          fileUrl = '';
+        }
+
         const updateRes = await db.query(
           `UPDATE assets
            SET marker_id = $1, type = $2, file_url = $3,
@@ -295,7 +307,7 @@ exports.updateProject = async (req, res, next) => {
                configuration = $13, updated_at = CURRENT_TIMESTAMP
            WHERE id = $14 AND project_id = $15`,
           [
-            a.marker_id || null, a.type || 'model3d', a.file_url || '',
+            a.marker_id || null, a.type || 'model3d', fileUrl,
             a.position_x || 0, a.position_y || 0, a.position_z || 0,
             a.rotation_x || 0, a.rotation_y || 0, a.rotation_z || 0,
             a.scale_x || 1, a.scale_y || 1, a.scale_z || 1,
@@ -308,7 +320,7 @@ exports.updateProject = async (req, res, next) => {
             `INSERT INTO assets (id, project_id, marker_id, type, file_url, position_x, position_y, position_z, rotation_x, rotation_y, rotation_z, scale_x, scale_y, scale_z, configuration, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
             [
-              aId, id, a.marker_id || null, a.type || 'model3d', a.file_url || '',
+              aId, id, a.marker_id || null, a.type || 'model3d', fileUrl,
               a.position_x || 0, a.position_y || 0, a.position_z || 0,
               a.rotation_x || 0, a.rotation_y || 0, a.rotation_z || 0,
               a.scale_x || 1, a.scale_y || 1, a.scale_z || 1,
@@ -502,7 +514,17 @@ exports.compileProjectTargets = async (req, res, next) => {
       });
     }
 
-    // 2. Validar que las tarjetas tengan imagen
+    // 2. Validar que las tarjetas tengan imagen y no sean URLs blob temporales
+    const blobMarker = markers.find(m => m.target_image && m.target_image.startsWith('blob:'));
+    if (blobMarker) {
+      return res.status(400).json({
+        success: false,
+        tracking_status: 'error',
+        tracking_error: 'La imagen de esta tarjeta todavía no está almacenada correctamente. Vuelve a subirla.',
+        error: 'La imagen de esta tarjeta todavía no está almacenada correctamente. Vuelve a subirla.'
+      });
+    }
+
     const markersWithImage = markers.filter(m => m.target_image && m.target_image.trim());
     if (markersWithImage.length === 0) {
       return res.status(400).json({
@@ -510,6 +532,22 @@ exports.compileProjectTargets = async (req, res, next) => {
         tracking_status: 'error',
         tracking_error: 'Ninguna tarjeta tiene imagen asignada. Sube la imagen física de la tarjeta antes de compilar.',
         error: 'Ninguna tarjeta tiene imagen asignada'
+      });
+    }
+
+    // Validar que todas las imágenes sean persistentes (https://, http://, /uploads/, /markers/)
+    const nonPersistentMarker = markersWithImage.find(m =>
+      !m.target_image.startsWith('https://') &&
+      !m.target_image.startsWith('http://') &&
+      !m.target_image.startsWith('/uploads/') &&
+      !m.target_image.startsWith('/markers/')
+    );
+    if (nonPersistentMarker) {
+      return res.status(400).json({
+        success: false,
+        tracking_status: 'error',
+        tracking_error: 'La imagen de esta tarjeta todavía no está almacenada correctamente. Vuelve a subirla.',
+        error: 'La imagen de esta tarjeta todavía no está almacenada correctamente. Vuelve a subirla.'
       });
     }
 

@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { Layers, Plus, Box, Image, Volume2, Video, Type, Trash2, Zap, Upload, HelpCircle, RefreshCw, CreditCard, Sparkles } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Layers, Plus, Box, Image, Volume2, Video, Type, Trash2, Zap, Upload, HelpCircle, RefreshCw, CreditCard, Sparkles, Loader2 } from 'lucide-react';
 import { apiService } from '../../services/api';
 
 export default function ElementsPanel({
@@ -8,6 +8,7 @@ export default function ElementsPanel({
   interactions = [],
   selectedMarkerId,
   selectedAssetId,
+  projectId,
   onSelectMarker,
   onSelectAsset,
   onAddMarker,
@@ -17,6 +18,8 @@ export default function ElementsPanel({
   onOpenRulesModal
 }) {
   const fileInputRefs = useRef({});
+  const [cardPreviews, setCardPreviews] = useState({});
+  const [uploadingMarkerId, setUploadingMarkerId] = useState(null);
 
   const handleTriggerFileInput = (markerId) => {
     if (fileInputRefs.current[markerId]) {
@@ -28,28 +31,45 @@ export default function ElementsPanel({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 1. Mostrar miniatura inmediatamente usando Blob URL local
-    const localUrl = URL.createObjectURL(file);
-    const targetMarker = markers.find(m => m.id === markerId);
+    // Permitir volver a seleccionar el mismo archivo si es necesario
+    e.target.value = '';
 
-    if (targetMarker && onUpdateMarker) {
-      onUpdateMarker(markerId, {
-        ...targetMarker,
-        target_image: localUrl
-      });
-    }
+    // 1. Crear Blob URL temporal ÚNICAMENTE para previsualización local mientras se sube
+    const localBlobUrl = URL.createObjectURL(file);
+    setCardPreviews(prev => ({ ...prev, [markerId]: localBlobUrl }));
+    setUploadingMarkerId(markerId);
 
-    // 2. Intentar guardar en backend /uploads si está disponible
     try {
-      const res = await apiService.uploadFile(file);
-      if (res?.file_url && targetMarker && onUpdateMarker) {
+      // 2. Subir inmediatamente el File al backend -> Cloudinary
+      const res = await apiService.uploadFile(file, {
+        projectId,
+        category: 'cards'
+      });
+
+      if (!res?.file_url || (!res.file_url.startsWith('https://') && !res.file_url.startsWith('http://'))) {
+        throw new Error('El servidor no devolvió una URL válida de almacenamiento.');
+      }
+
+      // 3. Actualizar marker.target_image exclusivamente con la secure_url de Cloudinary
+      const targetMarker = markers.find(m => m.id === markerId);
+      if (targetMarker && onUpdateMarker) {
         onUpdateMarker(markerId, {
           ...targetMarker,
           target_image: res.file_url
         });
       }
     } catch (err) {
-      console.warn('Subida remota no disponible; usando imagen local:', err.message);
+      console.error('[ElementsPanel] Error al subir imagen de tarjeta a Cloudinary:', err);
+      alert(`No se pudo almacenar la imagen de la tarjeta: ${err.message || 'Error desconocido'}`);
+    } finally {
+      // 4. Revocar el blob temporal y limpiar preview temporal
+      URL.revokeObjectURL(localBlobUrl);
+      setCardPreviews(prev => {
+        const next = { ...prev };
+        delete next[markerId];
+        return next;
+      });
+      setUploadingMarkerId(null);
     }
   };
 
@@ -170,11 +190,10 @@ export default function ElementsPanel({
                   <div className="card-target-preview-row">
                     {hasImage ? (
                       <img
-                        src={marker.target_image}
+                        src={cardPreviews[marker.id] || marker.target_image}
                         alt="Miniatura de la tarjeta física"
                         className="card-target-thumb"
                         onError={(e) => {
-                          // Fallback si la ruta de la imagen falla
                           e.currentTarget.style.display = 'none';
                         }}
                       />
@@ -189,13 +208,30 @@ export default function ElementsPanel({
                         type="button"
                         className="btn btn-secondary"
                         style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', minHeight: '30px', alignSelf: 'flex-start' }}
+                        disabled={uploadingMarkerId === marker.id}
                         onClick={() => handleTriggerFileInput(marker.id)}
                       >
-                        {hasImage ? <RefreshCw size={12} /> : <Upload size={12} />}
-                        <span>{hasImage ? 'Cambiar imagen' : 'Subir imagen'}</span>
+                        {uploadingMarkerId === marker.id ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin" />
+                            <span>Subiendo...</span>
+                          </>
+                        ) : hasImage ? (
+                          <>
+                            <RefreshCw size={12} />
+                            <span>Cambiar imagen</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={12} />
+                            <span>Subir imagen</span>
+                          </>
+                        )}
                       </button>
                       <span className="card-target-help-text">
-                        Esta es la imagen física que la cámara reconocerá.
+                        {uploadingMarkerId === marker.id
+                          ? 'Almacenando imagen en Cloudinary...'
+                          : 'Esta es la imagen física que la cámara reconocerá.'}
                       </span>
                     </div>
 

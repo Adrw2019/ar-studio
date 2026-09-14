@@ -2,23 +2,9 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Configuración de almacenamiento seguro
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    // Sanitizar nombre de archivo eliminando caracteres extraños
-    const sanitizedOriginal = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `${uniqueSuffix}-${sanitizedOriginal}`);
-  }
-});
+// Almacenamiento en memoria para compatibilidad total con Serverless / Netlify Functions
+// y transmisión directa por streams a Cloudinary o disco local sin errores de sistema de solo lectura
+const storage = multer.memoryStorage();
 
 // Validación de tipos de archivos permitidos
 const allowedExtensions = [

@@ -23,12 +23,13 @@ exports.createMarker = async (req, res, next) => {
     const { project_id, name, target_image, target_index, description } = req.body;
     const newId = req.body.id || `marker-${Date.now()}`;
     const targetIdx = parseInt(target_index !== undefined ? target_index : 0, 10);
+    const cleanTargetImage = (target_image && !target_image.startsWith('blob:')) ? target_image : '';
 
     const result = await db.query(
       `INSERT INTO markers (id, project_id, name, target_image, target_index, description, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING *`,
-      [newId, project_id, name || 'Nueva Tarjeta', target_image || '', targetIdx, description || '']
+      [newId, project_id, name || 'Nueva Tarjeta', cleanTargetImage, targetIdx, description || '']
     );
 
     return res.status(201).json({ success: true, data: result.rows[0] });

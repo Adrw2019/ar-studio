@@ -49,6 +49,7 @@ export default function UploadAssetModal({
   isOpen,
   onClose,
   targetMarkerId,
+  projectId,
   onAssetUploaded
 }) {
   if (!isOpen) return null;
@@ -115,9 +116,21 @@ export default function UploadAssetModal({
     setErrorMessage(null);
 
     try {
-      // Subir archivo al backend
-      const res = await apiService.uploadFile(selectedFile);
-      const fileUrl = res?.file_url || URL.createObjectURL(selectedFile);
+      const category = selectedType === 'model3d'
+        ? 'models'
+        : (selectedType === 'image' ? 'images' : (selectedType === 'video' ? 'video' : 'audio'));
+
+      // Subir archivo al backend -> storageService -> Cloudinary
+      const res = await apiService.uploadFile(selectedFile, {
+        projectId,
+        category
+      });
+
+      if (!res?.file_url || (!res.file_url.startsWith('https://') && !res.file_url.startsWith('http://') && !res.file_url.startsWith('/uploads/'))) {
+        throw new Error('El servidor no devolvió una URL válida para el archivo.');
+      }
+
+      const fileUrl = res.file_url;
 
       onAssetUploaded({
         marker_id: targetMarkerId,
@@ -142,30 +155,8 @@ export default function UploadAssetModal({
 
       onClose();
     } catch (err) {
-      console.warn('Error al subir al backend, usando referencia local:', err);
-      // Fallback local seguro para no bloquear la experiencia de los estudiantes
-      const localUrl = URL.createObjectURL(selectedFile);
-      onAssetUploaded({
-        marker_id: targetMarkerId,
-        type: selectedType,
-        file_url: localUrl,
-        position_x: 0,
-        position_y: 0,
-        position_z: 0,
-        rotation_x: 0,
-        rotation_y: 0,
-        rotation_z: 0,
-        scale_x: 0.75,
-        scale_y: 0.75,
-        scale_z: 0.75,
-        configuration: {
-          title: assetTitle || selectedFile.name,
-          category: activeOption.title,
-          description: `Elemento de tipo ${activeOption.title}.`,
-          interactive: true
-        }
-      });
-      onClose();
+      console.error('[UploadAssetModal] Error al subir archivo:', err);
+      setErrorMessage(err.message || 'Error al almacenar el archivo en la nube. Por favor reintenta.');
     } finally {
       setIsUploading(false);
     }

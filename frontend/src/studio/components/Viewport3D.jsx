@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { RotateCw, Grid, Sparkles, HelpCircle } from 'lucide-react';
+import { RotateCw, Grid, Sparkles, AlertTriangle, Loader2 } from 'lucide-react';
 
 export default function Viewport3D({
   activeAsset,
@@ -19,6 +19,8 @@ export default function Viewport3D({
   const animationMixerRef = useRef(null);
 
   const [showGrid, setShowGrid] = useState(true);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelError, setModelError] = useState(null);
   const gridHelperRef = useRef(null);
 
   // 1. Inicializar escena Three.js con OrbitControls
@@ -129,16 +131,6 @@ export default function Viewport3D({
         animationMixerRef.current.update(delta);
       }
 
-      // Animaciones procedurales si existen
-      const rotor = modelWrapper.getObjectByName('motor-rotor');
-      if (rotor) {
-        rotor.rotation.y += 2.0 * delta;
-      }
-      const orbits = modelWrapper.getObjectByName('energy-orbits');
-      if (orbits) {
-        orbits.rotation.y += 1.5 * delta;
-      }
-
       renderer.render(scene, camera);
     };
     animate();
@@ -172,6 +164,12 @@ export default function Viewport3D({
       (texture) => {
         texture.colorSpace = THREE.SRGBColorSpace;
         if (cardMeshRef.current) {
+          if (cardMeshRef.current.material) {
+            if (cardMeshRef.current.material.map) {
+              cardMeshRef.current.material.map.dispose();
+            }
+            cardMeshRef.current.material.dispose();
+          }
           cardMeshRef.current.material = new THREE.MeshStandardMaterial({
             map: texture,
             roughness: 0.4,
@@ -181,8 +179,13 @@ export default function Viewport3D({
       },
       undefined,
       (err) => {
-        // Si no carga la imagen remota, mantener material por defecto
         if (cardMeshRef.current) {
+          if (cardMeshRef.current.material) {
+            if (cardMeshRef.current.material.map) {
+              cardMeshRef.current.material.map.dispose();
+            }
+            cardMeshRef.current.material.dispose();
+          }
           cardMeshRef.current.material = new THREE.MeshStandardMaterial({
             color: 0x1e293b,
             roughness: 0.5,
@@ -193,31 +196,48 @@ export default function Viewport3D({
     );
   }, [activeMarker?.target_image]);
 
-  // 3. Cargar contenido según el tipo de asset (SIN cubo morado si no hay contenido)
+  // 3. Cargar contenido según el tipo de asset (Carga real GLTF / GLB con GLTFLoader)
   useEffect(() => {
     const wrapper = modelWrapperRef.current;
     if (!wrapper) return;
 
-    // Limpiar modelos anteriores
+    // Limpiar modelos anteriores del scene y liberar memoria GPU
     while (wrapper.children.length > 0) {
-      wrapper.remove(wrapper.children[0]);
+      const child = wrapper.children[0];
+      wrapper.remove(child);
+      disposeThreeObject(child);
     }
 
-    // SI NO HAY CONTENIDO CARGADO, NO MOSTRAR NADA (SE MUESTRA ESTADO VACÍO EN EL DOM)
+    if (animationMixerRef.current) {
+      animationMixerRef.current.stopAllAction();
+      animationMixerRef.current = null;
+    }
+
+    setModelError(null);
+    setModelLoading(false);
+
+    // Si no hay contenido cargado, no mostrar nada
     if (!activeAsset) return;
 
     let isCancelled = false;
 
-    // A) MODELO 3D
-    if (activeAsset.type === 'model3d' && activeAsset.file_url) {
-      const gltfLoader = new GLTFLoader();
-      const modelUrl = activeAsset.file_url;
+    // A) MODELO 3D REAL (GLB / GLTF)
+    if (activeAsset.type === 'model3d') {
+      if (activeAsset.file_url) {
+        setModelLoading(true);
+        setModelError(null);
+        const gltfLoader = new GLTFLoader();
 
-      if (modelUrl.endsWith('.glb') || modelUrl.endsWith('.gltf') || modelUrl.includes('/models/')) {
         gltfLoader.load(
-          modelUrl,
+          activeAsset.file_url,
           (gltf) => {
-            if (isCancelled) return;
+            if (isCancelled) {
+              disposeThreeObject(gltf.scene);
+              return;
+            }
+            setModelLoading(false);
+            setModelError(null);
+
             const model = gltf.scene;
             model.traverse((node) => {
               if (node.isMesh) {
@@ -225,6 +245,16 @@ export default function Viewport3D({
                 node.receiveShadow = true;
               }
             });
+
+            // Centrar la geometría del modelo en X y Z y asentar la base en Y = 0
+            const bbox = new THREE.Box3().setFromObject(model);
+            if (!bbox.isEmpty()) {
+              const center = bbox.getCenter(new THREE.Vector3());
+              model.position.x = -center.x;
+              model.position.z = -center.z;
+              model.position.y = -bbox.min.y;
+            }
+
             wrapper.add(model);
 
             if (gltf.animations && gltf.animations.length > 0) {
@@ -234,23 +264,27 @@ export default function Viewport3D({
             }
           },
           undefined,
-          () => {
+          (err) => {
             if (isCancelled) return;
-            // Solo si falla la carga del modelo se muestra objeto procedural didáctico
-            const procedural = createEditorProceduralModel(activeAsset.configuration?.title || activeMarker?.name || 'Motor');
-            wrapper.add(procedural);
+            console.error('[Viewport3D] Error cargando modelo 3D desde:', activeAsset.file_url, err);
+            setModelLoading(false);
+            setModelError('No se pudo cargar el modelo 3D');
+            const errorIndicator = createErrorPlaceholderMesh();
+            wrapper.add(errorIndicator);
           }
         );
       } else {
-        const procedural = createEditorProceduralModel(activeAsset.configuration?.title || activeMarker?.name || 'Motor');
-        wrapper.add(procedural);
+        setModelError('No se ha proporcionado una URL para el modelo 3D');
       }
     }
     // B) IMAGEN DIGITAL SUPERPUESTA
     else if (activeAsset.type === 'image' && activeAsset.file_url) {
       const textureLoader = new THREE.TextureLoader();
       textureLoader.load(activeAsset.file_url, (tex) => {
-        if (isCancelled) return;
+        if (isCancelled) {
+          tex.dispose();
+          return;
+        }
         tex.colorSpace = THREE.SRGBColorSpace;
         const aspect = (tex.image?.width || 1) / (tex.image?.height || 1);
         const geo = new THREE.PlaneGeometry(0.8 * aspect, 0.8);
@@ -387,6 +421,60 @@ export default function Viewport3D({
         </button>
       </div>
 
+      {/* Alerta de Error de Carga de Modelo 3D */}
+      {modelError && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '1rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(239, 68, 68, 0.95)',
+            color: '#ffffff',
+            padding: '0.45rem 1.1rem',
+            borderRadius: '8px',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+            zIndex: 10,
+            pointerEvents: 'none'
+          }}
+        >
+          <AlertTriangle size={15} />
+          <span>{modelError}</span>
+        </div>
+      )}
+
+      {/* Indicador de Carga */}
+      {modelLoading && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '1rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+            border: '1px solid rgba(0, 242, 254, 0.4)',
+            color: 'var(--accent-cyan)',
+            padding: '0.45rem 1rem',
+            borderRadius: '8px',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            zIndex: 10,
+            pointerEvents: 'none'
+          }}
+        >
+          <Loader2 size={15} className="animate-spin" />
+          <span>Cargando modelo 3D...</span>
+        </div>
+      )}
+
       {/* Etiqueta de Información del Viewport */}
       <div className="viewport-info-tag">
         Tarjeta: <strong>{activeMarker?.name || 'Tarjeta 1'}</strong> • Arrastra para orbitar • Rueda para zoom
@@ -395,74 +483,80 @@ export default function Viewport3D({
   );
 }
 
-// Generador procedural didáctico para modelos de ejemplo
-function createEditorProceduralModel(type = '') {
-  const root = new THREE.Group();
-  const lower = type.toLowerCase();
+// Indicador de error 3D claramente identificado (reemplaza cualquier falso modelo placeholder)
+function createErrorPlaceholderMesh() {
+  const group = new THREE.Group();
+  group.name = 'model-load-error-placeholder';
 
-  if (lower.includes('motor') || lower.includes('rotor')) {
-    const baseGeo = new THREE.CylinderGeometry(0.55, 0.6, 0.25, 32);
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.25 });
-    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-    baseMesh.position.y = 0.12;
-    baseMesh.castShadow = true;
-    root.add(baseMesh);
+  // Caja wireframe roja de error
+  const boxGeo = new THREE.BoxGeometry(0.65, 0.65, 0.65);
+  const edges = new THREE.EdgesGeometry(boxGeo);
+  const lineMat = new THREE.LineBasicMaterial({ color: 0xef4444, linewidth: 2 });
+  const wireframe = new THREE.LineSegments(edges, lineMat);
+  wireframe.position.y = 0.35;
+  group.add(wireframe);
 
-    const statorGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.7, 32, 1, true);
-    const statorMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.9, roughness: 0.3, side: THREE.DoubleSide });
-    const statorMesh = new THREE.Mesh(statorGeo, statorMat);
-    statorMesh.position.y = 0.55;
-    root.add(statorMesh);
+  // Cartel flotante de error
+  const canvas = document.createElement('canvas');
+  canvas.width = 400;
+  canvas.height = 140;
+  const ctx = canvas.getContext('2d');
 
-    const coilMat = new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.95, roughness: 0.15 });
-    for (let i = 0; i < 4; i++) {
-      const coilGeo = new THREE.TorusGeometry(0.38, 0.05, 16, 32);
-      const coilMesh = new THREE.Mesh(coilGeo, coilMat);
-      coilMesh.rotation.x = Math.PI / 2;
-      coilMesh.position.y = 0.35 + i * 0.12;
-      root.add(coilMesh);
+  ctx.fillStyle = '#1e1b1b';
+  ctx.roundRect(8, 8, 384, 124, 16);
+  ctx.fill();
+  ctx.strokeStyle = '#ef4444';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.fillStyle = '#ef4444';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('⚠ Error en Modelo 3D', 200, 52);
+
+  ctx.fillStyle = '#f87171';
+  ctx.font = '16px sans-serif';
+  ctx.fillText('No se pudo cargar el modelo 3D', 200, 88);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const planeGeo = new THREE.PlaneGeometry(0.9, 0.32);
+  const planeMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+  const badgeMesh = new THREE.Mesh(planeGeo, planeMat);
+  badgeMesh.position.y = 0.78;
+  group.add(badgeMesh);
+
+  return group;
+}
+
+// Limpieza recursiva de objetos Three.js para liberar memoria GPU
+function disposeThreeObject(obj) {
+  if (!obj) return;
+  obj.traverse((child) => {
+    if (child.geometry) {
+      child.geometry.dispose();
     }
-
-    const rotorGroup = new THREE.Group();
-    rotorGroup.name = 'motor-rotor';
-    rotorGroup.position.y = 0.55;
-
-    const shaftGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.1, 16);
-    const shaftMat = new THREE.MeshStandardMaterial({ color: 0x00f2fe, metalness: 0.9, roughness: 0.1 });
-    const shaftMesh = new THREE.Mesh(shaftGeo, shaftMat);
-    rotorGroup.add(shaftMesh);
-
-    for (let i = 0; i < 6; i++) {
-      const bladeGeo = new THREE.BoxGeometry(0.32, 0.06, 0.02);
-      const bladeMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.8, roughness: 0.2 });
-      const bladeMesh = new THREE.Mesh(bladeGeo, bladeMat);
-      bladeMesh.rotation.y = (i * Math.PI) / 3;
-      rotorGroup.add(bladeMesh);
+    if (child.material) {
+      if (Array.isArray(child.material)) {
+        child.material.forEach((mat) => disposeMaterial(mat));
+      } else {
+        disposeMaterial(child.material);
+      }
     }
-    root.add(rotorGroup);
+  });
+}
 
-  } else {
-    // Generar un átomo / esfera interactiva didáctica identificada como ejemplo
-    const sphereGeo = new THREE.SphereGeometry(0.35, 32, 32);
-    const sphereMat = new THREE.MeshStandardMaterial({ color: 0x00f2fe, roughness: 0.2, metalness: 0.8 });
-    const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
-    sphereMesh.position.y = 0.45;
-    root.add(sphereMesh);
-
-    const orbitGroup = new THREE.Group();
-    orbitGroup.name = 'energy-orbits';
-    orbitGroup.position.y = 0.45;
-    for (let i = 0; i < 2; i++) {
-      const ringGeo = new THREE.TorusGeometry(0.55 + i * 0.1, 0.02, 16, 40);
-      const ringMat = new THREE.MeshBasicMaterial({ color: i === 0 ? 0x00f2fe : 0x38bdf8 });
-      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-      ringMesh.rotation.x = Math.PI / 3 + i * 0.4;
-      orbitGroup.add(ringMesh);
+function disposeMaterial(mat) {
+  if (!mat) return;
+  for (const key of Object.keys(mat)) {
+    const value = mat[key];
+    if (value && typeof value === 'object' && typeof value.dispose === 'function') {
+      value.dispose();
     }
-    root.add(orbitGroup);
   }
-
-  return root;
+  if (typeof mat.dispose === 'function') {
+    mat.dispose();
+  }
 }
 
 // Crea un panel de texto didáctico en 3D

@@ -67,7 +67,18 @@ export default function StudioEditor() {
     if (!projectData || !projectData.id) return;
     setSaveStatus('saving');
     try {
-      await apiService.updateProject(projectData.id, projectData);
+      const sanitizedProject = {
+        ...projectData,
+        markers: (projectData.markers || []).map(m => ({
+          ...m,
+          target_image: (m.target_image && m.target_image.startsWith('blob:')) ? '' : m.target_image
+        })),
+        assets: (projectData.assets || []).map(a => ({
+          ...a,
+          file_url: (a.file_url && a.file_url.startsWith('blob:')) ? '' : a.file_url
+        }))
+      };
+      await apiService.updateProject(sanitizedProject.id, sanitizedProject);
       setSaveStatus('saved');
     } catch (err) {
       console.error('Error en guardado:', err);
@@ -115,6 +126,18 @@ export default function StudioEditor() {
   // Compilar targets físicos con MindAR
   const handleCompileTargets = async () => {
     if (!project || !project.id) return;
+
+    // Validación preventiva de URLs blob
+    const hasBlob = (project.markers || []).some(m => m.target_image && m.target_image.startsWith('blob:'));
+    if (hasBlob) {
+      setProject(prev => ({
+        ...prev,
+        tracking_status: 'error',
+        tracking_error: 'La imagen de esta tarjeta todavía no está almacenada correctamente. Vuelve a subirla.'
+      }));
+      return;
+    }
+
     setIsCompiling(true);
     const compilingState = { ...project, tracking_status: 'compiling', tracking_error: null };
     setProject(compilingState);
@@ -228,6 +251,13 @@ export default function StudioEditor() {
 
   const handleUpdateMarker = (markerId, updatedMarker) => {
     if (!project) return;
+
+    // Rechazar asignaciones de URLs blob temporales en target_image
+    if (updatedMarker.target_image && updatedMarker.target_image.startsWith('blob:')) {
+      console.warn('[StudioEditor] Intento de asignar blob URL a target_image rechazado.');
+      return;
+    }
+
     const originalMarker = (project.markers || []).find(m => m.id === markerId);
     const imageChanged = originalMarker && originalMarker.target_image !== updatedMarker.target_image;
 
@@ -451,6 +481,7 @@ export default function StudioEditor() {
             interactions={project.interactions || []}
             selectedMarkerId={selectedMarkerId}
             selectedAssetId={selectedAssetId}
+            projectId={project?.id}
             onSelectMarker={handleSelectMarker}
             onSelectAsset={handleSelectAsset}
             onAddMarker={handleAddMarker}
@@ -545,6 +576,7 @@ export default function StudioEditor() {
           isOpen={true}
           onClose={() => setUploadModalTargetMarkerId(null)}
           targetMarkerId={uploadModalTargetMarkerId}
+          projectId={project?.id}
           onAssetUploaded={handleAssetUploaded}
         />
       )}

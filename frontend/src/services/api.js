@@ -161,10 +161,16 @@ export const apiService = {
   /**
    * Subir archivo al backend (GLB, PNG, JPG, MP3, MP4)
    */
-  async uploadFile(file) {
+  async uploadFile(file, options = {}) {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (options.projectId) {
+        formData.append('projectId', options.projectId);
+      }
+      if (options.category) {
+        formData.append('category', options.category);
+      }
 
       const res = await fetch(`${API_BASE_URL}/assets/upload`, {
         method: 'POST',
