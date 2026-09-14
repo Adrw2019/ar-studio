@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Zap, Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { X, Zap, Plus, Trash2, CheckCircle2, HelpCircle } from 'lucide-react';
 
 export default function RulesEditorModal({
   isOpen,
@@ -15,7 +15,7 @@ export default function RulesEditorModal({
   const handleAddRule = () => {
     const newRule = {
       id: `interaction-${Date.now()}`,
-      name: 'Nueva Regla Multi-Tarjeta',
+      name: 'Nueva interacción entre tarjetas',
       trigger_type: 'multi_marker',
       trigger_config: {
         required_markers: markers.slice(0, 2).map(m => m.name)
@@ -78,15 +78,25 @@ export default function RulesEditorModal({
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <Zap size={22} color="var(--accent-amber)" />
-            <h2>Reglas Multi-Tarjeta</h2>
+            <h2>Combinar tarjetas</h2>
+            <button
+              type="button"
+              className="help-icon-btn"
+              aria-label="Ayuda sobre combinar tarjetas"
+            >
+              ?
+              <span className="tooltip-box">
+                Haz que ocurra algo especial cuando la cámara vea dos tarjetas juntas.
+              </span>
+            </button>
           </div>
           <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Cerrar">
             <X size={20} />
           </button>
         </div>
 
-        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-          Configura qué ocurre cuando la cámara detecta dos o más tarjetas físicas simultáneamente sobre la mesa.
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+          Configura qué ocurre cuando la cámara detecta dos o más tarjetas físicas al mismo tiempo sobre la mesa (por ejemplo: activar un motor al juntar la batería).
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '55vh', overflowY: 'auto' }}>
@@ -118,23 +128,25 @@ export default function RulesEditorModal({
                       fontFamily: 'var(--font-display)',
                       fontWeight: 700,
                       fontSize: '0.95rem',
-                      outline: 'none'
+                      outline: 'none',
+                      width: '85%'
                     }}
+                    placeholder="Nombre de la interacción"
                   />
                   <button
                     type="button"
                     style={{ background: 'transparent', border: 'none', color: 'var(--accent-rose)', cursor: 'pointer' }}
                     onClick={() => handleRemoveRule(idx)}
-                    title="Eliminar regla"
+                    title="Eliminar interacción"
                   >
                     <Trash2 size={16} />
                   </button>
                 </div>
 
-                {/* Selección de marcadores requeridos */}
+                {/* Selección de tarjetas requeridas */}
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: '0.75rem' }}>
-                    Tarjetas Requeridas (deben verse a la vez):
+                    Tarjetas que deben juntarse (enfocadas a la vez):
                   </label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                     {markers.map((m) => {
@@ -168,7 +180,7 @@ export default function RulesEditorModal({
                 {/* Mensaje al activarse */}
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: '0.75rem' }}>
-                    Mensaje en pantalla al completar interacción:
+                    Mensaje en pantalla al juntar las tarjetas:
                   </label>
                   <input
                     type="text"
@@ -189,7 +201,7 @@ export default function RulesEditorModal({
             onClick={handleAddRule}
           >
             <Plus size={16} />
-            <span>Agregar Nueva Regla de Interacción</span>
+            <span>Crear interacción entre tarjetas</span>
           </button>
         </div>
 
@@ -198,7 +210,7 @@ export default function RulesEditorModal({
             Cancelar
           </button>
           <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={handleSave}>
-            Guardar Reglas
+            Guardar interacciones
           </button>
         </div>
       </div>

@@ -236,7 +236,30 @@ export default function StudioEditor() {
         projectSlug={project.slug}
       />
 
-      {/* 2. Área de Trabajo Principal */}
+      {/* 2. Guía de Flujo Discreto para Estudiantes */}
+      <div className="editor-stepper">
+        <div className="stepper-item active">
+          <span className="stepper-num">1</span>
+          <span>Tarjeta</span>
+        </div>
+        <span className="stepper-arrow">→</span>
+        <div className="stepper-item active">
+          <span className="stepper-num">2</span>
+          <span>Contenido</span>
+        </div>
+        <span className="stepper-arrow">→</span>
+        <div className="stepper-item">
+          <span className="stepper-num">3</span>
+          <span>Interacción</span>
+        </div>
+        <span className="stepper-arrow">→</span>
+        <div className="stepper-item">
+          <span className="stepper-num">4</span>
+          <span>Publicar</span>
+        </div>
+      </div>
+
+      {/* 3. Área de Trabajo Principal */}
       <div className="editor-workspace">
         {/* Panel Izquierdo: Elementos */}
         <div className={`editor-panel-left ${mobileActiveTab === 'elements' ? 'tab-active' : ''}`}>
@@ -250,6 +273,7 @@ export default function StudioEditor() {
             onSelectAsset={handleSelectAsset}
             onAddMarker={handleAddMarker}
             onDeleteMarker={handleDeleteMarker}
+            onUpdateMarker={handleUpdateMarker}
             onOpenUploadModal={(markerId) => setUploadModalTargetMarkerId(markerId)}
             onOpenRulesModal={() => setIsRulesModalOpen(true)}
           />
@@ -273,7 +297,7 @@ export default function StudioEditor() {
         </div>
       </div>
 
-      {/* 3. Barra de Pestañas Inferior para Tablet y Celular */}
+      {/* 4. Barra de Pestañas Inferior para Tablet y Celular */}
       <nav className="editor-mobile-tab-bar">
         <button
           type="button"
@@ -281,7 +305,7 @@ export default function StudioEditor() {
           onClick={() => setMobileActiveTab(mobileActiveTab === 'elements' ? 'viewport' : 'elements')}
         >
           <Layers size={18} />
-          <span>Elementos</span>
+          <span>Tarjetas</span>
         </button>
 
         <button
@@ -290,7 +314,7 @@ export default function StudioEditor() {
           onClick={() => setMobileActiveTab('viewport')}
         >
           <Eye size={18} />
-          <span>Vista 3D</span>
+          <span>Vista previa</span>
         </button>
 
         <button

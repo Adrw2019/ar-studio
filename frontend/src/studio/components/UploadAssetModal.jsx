@@ -1,6 +1,49 @@
 import React, { useState } from 'react';
-import { X, Upload, Box, Image, Volume2, Video, Loader2 } from 'lucide-react';
+import { X, Upload, Box, Image, Volume2, Video, Type, Loader2, Sparkles, PlusCircle } from 'lucide-react';
 import { apiService } from '../../services/api';
+
+const CONTENT_OPTIONS = [
+  {
+    type: 'model3d',
+    title: 'Modelo 3D',
+    desc: 'Objeto tridimensional que aparecerá sobre la tarjeta.',
+    icon: Box,
+    accept: '.glb,.gltf',
+    hint: 'Archivos .glb y .gltf'
+  },
+  {
+    type: 'image',
+    title: 'Imagen',
+    desc: 'Imagen superpuesta sobre la tarjeta.',
+    icon: Image,
+    accept: '.png,.jpg,.jpeg,.webp',
+    hint: 'Archivos .png, .jpg y .webp'
+  },
+  {
+    type: 'video',
+    title: 'Video',
+    desc: 'Reproduce un video al reconocerla.',
+    icon: Video,
+    accept: '.mp4,.webm',
+    hint: 'Archivos .mp4 y .webm'
+  },
+  {
+    type: 'audio',
+    title: 'Audio',
+    desc: 'Reproduce una explicación.',
+    icon: Volume2,
+    accept: '.mp3,.wav,.ogg',
+    hint: 'Archivos .mp3 y .wav'
+  },
+  {
+    type: 'text',
+    title: 'Texto',
+    desc: 'Muestra información educativa.',
+    icon: Type,
+    accept: null,
+    hint: 'Mensaje didáctico o tarjeta informativa'
+  }
+];
 
 export default function UploadAssetModal({
   isOpen,
@@ -10,11 +53,14 @@ export default function UploadAssetModal({
 }) {
   if (!isOpen) return null;
 
-  const [fileType, setFileType] = useState('model3d'); // 'model3d', 'image', 'audio', 'video'
+  const [selectedType, setSelectedType] = useState('model3d');
   const [assetTitle, setAssetTitle] = useState('');
+  const [textContent, setTextContent] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  const activeOption = CONTENT_OPTIONS.find(o => o.type === selectedType) || CONTENT_OPTIONS[0];
 
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -29,8 +75,39 @@ export default function UploadAssetModal({
 
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
+
+    if (selectedType === 'text') {
+      if (!textContent.trim()) {
+        setErrorMessage('Por favor escribe el texto educativo.');
+        return;
+      }
+
+      onAssetUploaded({
+        marker_id: targetMarkerId,
+        type: 'text',
+        file_url: '',
+        position_x: 0,
+        position_y: 0.2,
+        position_z: 0,
+        rotation_x: 0,
+        rotation_y: 0,
+        rotation_z: 0,
+        scale_x: 1,
+        scale_y: 1,
+        scale_z: 1,
+        configuration: {
+          title: assetTitle || 'Ficha Educativa',
+          category: 'Información',
+          description: textContent,
+          interactive: true
+        }
+      });
+      onClose();
+      return;
+    }
+
     if (!selectedFile) {
-      setErrorMessage('Por favor selecciona un archivo');
+      setErrorMessage('Por favor selecciona un archivo desde tu dispositivo.');
       return;
     }
 
@@ -38,17 +115,16 @@ export default function UploadAssetModal({
     setErrorMessage(null);
 
     try {
-      // Subir archivo físico al backend
+      // Subir archivo al backend
       const res = await apiService.uploadFile(selectedFile);
-      const fileUrl = res.file_url;
+      const fileUrl = res?.file_url || URL.createObjectURL(selectedFile);
 
-      // Notificar al editor para agregar el nuevo asset
       onAssetUploaded({
         marker_id: targetMarkerId,
-        type: fileType,
+        type: selectedType,
         file_url: fileUrl,
         position_x: 0,
-        position_y: 0,
+        position_y: selectedType === 'model3d' ? 0 : 0.1,
         position_z: 0,
         rotation_x: 0,
         rotation_y: 0,
@@ -58,20 +134,21 @@ export default function UploadAssetModal({
         scale_z: 0.75,
         configuration: {
           title: assetTitle || selectedFile.name,
-          category: 'Elemento 3D',
-          description: 'Objeto didáctico de Realidad Aumentada.',
+          category: activeOption.title,
+          description: `Elemento de tipo ${activeOption.title} para la experiencia AR.`,
           interactive: true
         }
       });
 
       onClose();
     } catch (err) {
-      console.error('Error al subir archivo:', err);
-      // Si falla la subida al backend, fallback con URL simulada o local para que no bloquee
+      console.warn('Error al subir al backend, usando referencia local:', err);
+      // Fallback local seguro para no bloquear la experiencia de los estudiantes
+      const localUrl = URL.createObjectURL(selectedFile);
       onAssetUploaded({
         marker_id: targetMarkerId,
-        type: fileType,
-        file_url: `/models/${selectedFile.name}`,
+        type: selectedType,
+        file_url: localUrl,
         position_x: 0,
         position_y: 0,
         position_z: 0,
@@ -83,8 +160,8 @@ export default function UploadAssetModal({
         scale_z: 0.75,
         configuration: {
           title: assetTitle || selectedFile.name,
-          category: 'Elemento 3D',
-          description: 'Objeto didáctico de Realidad Aumentada.',
+          category: activeOption.title,
+          description: `Elemento de tipo ${activeOption.title}.`,
           interactive: true
         }
       });
@@ -96,93 +173,118 @@ export default function UploadAssetModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" style={{ maxWidth: '460px' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" style={{ maxWidth: '490px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <Upload size={22} color="var(--accent-cyan)" />
-            <h2>Subir Contenido AR</h2>
+            <Sparkles size={20} color="var(--accent-cyan)" />
+            <h2>Agregar contenido</h2>
           </div>
           <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Cerrar">
             <X size={20} />
           </button>
         </div>
 
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+          Elige qué tipo de elemento aparecerá sobre la tarjeta física al enfocarla con la cámara:
+        </p>
+
         <form onSubmit={handleUploadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Tipo de Elemento */}
-          <div className="form-group">
-            <label className="form-label">Tipo de Elemento</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-              <button
-                type="button"
-                className={`btn ${fileType === 'model3d' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ padding: '0.5rem', fontSize: '0.8rem', minHeight: '36px' }}
-                onClick={() => setFileType('model3d')}
-              >
-                <Box size={16} />
-                <span>Modelo 3D</span>
-              </button>
-              <button
-                type="button"
-                className={`btn ${fileType === 'audio' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ padding: '0.5rem', fontSize: '0.8rem', minHeight: '36px' }}
-                onClick={() => setFileType('audio')}
-              >
-                <Volume2 size={16} />
-                <span>Audio</span>
-              </button>
-            </div>
+          {/* 1. Selector de tipo de contenido */}
+          <div className="content-type-grid">
+            {CONTENT_OPTIONS.map((option) => {
+              const IconComp = option.icon;
+              const isSelected = selectedType === option.type;
+
+              return (
+                <div
+                  key={option.type}
+                  className={`content-type-option ${isSelected ? 'selected' : ''}`}
+                  onClick={() => {
+                    setSelectedType(option.type);
+                    setSelectedFile(null);
+                    setErrorMessage(null);
+                  }}
+                >
+                  <div className="content-type-icon-box" style={{ background: isSelected ? 'var(--accent-cyan)' : undefined, color: isSelected ? '#050b14' : undefined }}>
+                    <IconComp size={18} />
+                  </div>
+                  <div>
+                    <div className="content-type-title">{option.title}</div>
+                    <div className="content-type-desc">{option.desc}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Nombre / Título */}
+          {/* 2. Título o nombre del contenido */}
           <div className="form-group">
-            <label className="form-label">Nombre del Elemento</label>
+            <label className="form-label">Nombre del elemento</label>
             <input
               type="text"
               className="form-input"
               value={assetTitle}
               onChange={(e) => setAssetTitle(e.target.value)}
-              placeholder="Ej: Motor Eléctrico, Batería, etc."
+              placeholder="Ej: Motor Eléctrico, Explicación del circuito, etc."
               required
             />
           </div>
 
-          {/* File Input */}
-          <label
-            style={{
-              border: '2px dashed var(--border-glow)',
-              borderRadius: '14px',
-              padding: '1.5rem 1rem',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              cursor: 'pointer',
-              background: 'rgba(0, 242, 254, 0.03)'
-            }}
-          >
-            <Upload size={24} color="var(--accent-cyan)" />
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              {selectedFile ? selectedFile.name : 'Seleccionar archivo desde tu dispositivo'}
-            </span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {fileType === 'model3d' ? 'Soporta archivos .glb y .gltf' : 'Soporta .mp3 y .wav'}
-            </span>
-            <input
-              type="file"
-              accept={fileType === 'model3d' ? '.glb,.gltf' : '.mp3,.wav'}
-              onChange={handleFileSelect}
-              style={{ display: 'none' }}
-            />
-          </label>
+          {/* 3. Entrada según tipo (Archivo o Texto) */}
+          {selectedType === 'text' ? (
+            <div className="form-group">
+              <label className="form-label">Texto educativo que se mostrará</label>
+              <textarea
+                className="form-textarea"
+                rows={4}
+                value={textContent}
+                onChange={(e) => setTextContent(e.target.value)}
+                placeholder="Escribe la explicación o información educativa que aparecerá sobre la tarjeta..."
+                required
+              />
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">Archivo digital ({activeOption.hint})</label>
+              <label
+                style={{
+                  border: '2px dashed var(--border-glow)',
+                  borderRadius: '12px',
+                  padding: '1.25rem 1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  cursor: 'pointer',
+                  background: 'rgba(0, 242, 254, 0.03)'
+                }}
+              >
+                <Upload size={22} color="var(--accent-cyan)" />
+                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center' }}>
+                  {selectedFile ? selectedFile.name : 'Seleccionar archivo desde tu dispositivo'}
+                </span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  {activeOption.hint}
+                </span>
+                <input
+                  type="file"
+                  accept={activeOption.accept}
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
+          )}
 
           {errorMessage && (
-            <div style={{ color: 'var(--accent-rose)', fontSize: '0.8rem' }}>
+            <div style={{ color: 'var(--accent-rose)', fontSize: '0.78rem', background: 'rgba(239, 68, 68, 0.1)', padding: '0.5rem', borderRadius: '8px' }}>
               {errorMessage}
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
             <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose}>
               Cancelar
             </button>
@@ -190,10 +292,10 @@ export default function UploadAssetModal({
               type="submit"
               className="btn btn-primary"
               style={{ flex: 1 }}
-              disabled={!selectedFile || isUploading}
+              disabled={isUploading || (selectedType !== 'text' && !selectedFile)}
             >
-              {isUploading ? <Loader2 size={16} className="animate-spin-slow" /> : <Upload size={16} />}
-              <span>{isUploading ? 'Subiendo...' : 'Asociar a Tarjeta'}</span>
+              {isUploading ? <Loader2 size={16} className="animate-spin-slow" /> : <PlusCircle size={16} />}
+              <span>{isUploading ? 'Agregando...' : 'Agregar a la tarjeta'}</span>
             </button>
           </div>
         </form>
