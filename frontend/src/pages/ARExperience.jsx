@@ -176,8 +176,9 @@ export default function ARExperience() {
       if (statusState.activeMarkerName && projectData?.markers) {
         const activeMarker = projectData.markers.find(m => m.name === statusState.activeMarkerName);
         if (activeMarker) {
-          const associatedAsset = projectData.assets?.find(a => a.marker_id === activeMarker.id);
-          setSelectedMarkerInfo(associatedAsset?.configuration || activeMarker.info || {
+          const markerAssets = (projectData.assets || []).filter(a => a.marker_id === activeMarker.id);
+          const assetWithInfo = markerAssets.find(a => a.configuration?.title || a.configuration?.description) || markerAssets[0];
+          setSelectedMarkerInfo(assetWithInfo?.configuration || activeMarker.info || {
             title: activeMarker.name,
             description: activeMarker.description || 'Elemento didáctico interactivo.'
           });

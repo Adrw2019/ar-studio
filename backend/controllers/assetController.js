@@ -114,8 +114,54 @@ exports.createAsset = async (req, res, next) => {
 exports.deleteAsset = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    // 1. Buscar asset por id para obtener metadata y file_url
+    const assetRes = await db.query('SELECT * FROM assets WHERE id = $1', [id]);
+    if (assetRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Contenido digital no encontrado' });
+    }
+
+    const asset = assetRes.rows[0];
+    const fileUrl = asset.file_url;
+    const assetType = (asset.type || 'model3d').toLowerCase();
+
+    // 2. Eliminar registro de PostgreSQL Neon
     await db.query('DELETE FROM assets WHERE id = $1', [id]);
-    return res.status(200).json({ success: true, message: 'Asset eliminado' });
+    console.log(`[assetController] Registro eliminado de Neon para asset: ${id}`);
+
+    // 3. Eliminar archivo de Cloudinary/almacenamiento si existe y no es tipo texto
+    if (fileUrl && assetType !== 'text' && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://') || fileUrl.startsWith('/uploads/'))) {
+      // Verificar si otro asset o marcador sigue usando este mismo archivo
+      const otherAssetsRes = await db.query(
+        'SELECT COUNT(*) FROM assets WHERE file_url = $1 AND id != $2',
+        [fileUrl, id]
+      );
+      const otherMarkersRes = await db.query(
+        'SELECT COUNT(*) FROM markers WHERE target_image = $1',
+        [fileUrl]
+      );
+      const isStillReferenced = parseInt(otherAssetsRes.rows[0]?.count || 0, 10) > 0 ||
+                                parseInt(otherMarkersRes.rows[0]?.count || 0, 10) > 0;
+
+      if (!isStillReferenced) {
+        try {
+          const resourceType = (assetType === 'model3d' || assetType === 'model') ? 'raw' : undefined;
+          await storageService.deleteFile(fileUrl, { resource_type: resourceType });
+          console.log(`[assetController] Archivo eliminado de almacenamiento: ${fileUrl}`);
+        } catch (storageErr) {
+          console.warn(`[assetController] Advertencia al eliminar archivo de Cloudinary (${fileUrl}):`, storageErr.message);
+        }
+      } else {
+        console.log(`[assetController] El archivo ${fileUrl} sigue referenciado por otro elemento. Se conserva en Cloudinary.`);
+      }
+    }
+
+    // 4. Responder
+    return res.status(200).json({
+      success: true,
+      message: 'Contenido digital eliminado exitosamente',
+      deleted_id: id
+    });
   } catch (error) {
     next(error);
   }

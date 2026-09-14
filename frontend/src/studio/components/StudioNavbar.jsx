@@ -15,25 +15,28 @@ export default function StudioNavbar({
 
   return (
     <header className="studio-navbar">
-      <div className="studio-nav-left">
-        <button
-          type="button"
-          className="btn btn-secondary btn-icon"
-          style={{ width: '38px', height: '38px' }}
-          onClick={() => navigate('/studio')}
-          aria-label="Volver a proyectos"
-          title="Volver al Dashboard"
-        >
-          <ArrowLeft size={18} />
-        </button>
+      {/* Fila Superior: [ ← ] + Título Proyecto + Estado de Guardado */}
+      <div className="studio-nav-row-top">
+        <div className="studio-nav-left">
+          <button
+            type="button"
+            className="btn btn-secondary btn-icon nav-back-btn"
+            onClick={() => navigate('/studio')}
+            aria-label="Volver a proyectos"
+            title="Volver al Dashboard"
+          >
+            <ArrowLeft size={18} />
+          </button>
 
-        <input
-          type="text"
-          value={projectName || ''}
-          onChange={(e) => onNameChange(e.target.value)}
-          className="project-title-input"
-          placeholder="Nombre del Proyecto"
-        />
+          <input
+            type="text"
+            value={projectName || ''}
+            onChange={(e) => onNameChange(e.target.value)}
+            className="project-title-input"
+            placeholder="Nombre del Proyecto"
+            aria-label="Nombre del Proyecto"
+          />
+        </div>
 
         <div className={`save-status-pill ${saveStatus}`}>
           {saveStatus === 'saving' && (
@@ -49,49 +52,47 @@ export default function StudioNavbar({
             </>
           )}
           {saveStatus === 'unsaved' && (
-            <span>Cambios sin guardar</span>
+            <span>Sin guardar</span>
           )}
         </div>
       </div>
 
+      {/* Fila Inferior (en móvil) / Derecha (en PC): Acciones con touch targets >= 44px */}
       <div className="studio-nav-actions">
         <button
           type="button"
-          className="btn btn-secondary"
-          style={{ padding: '0.45rem 0.85rem', fontSize: '0.85rem', minHeight: '38px' }}
+          className="btn btn-secondary nav-action-btn"
           onClick={onOpenTheme}
           title="Personalizar apariencia, colores y textos del proyecto"
         >
           <Sparkles size={16} color="var(--accent-amber)" />
-          <span className="hide-mobile-sm">Tema</span>
+          <span>Tema</span>
         </button>
 
         <button
           type="button"
-          className="btn btn-secondary"
-          style={{ padding: '0.45rem 0.85rem', fontSize: '0.85rem', minHeight: '38px' }}
+          className="btn btn-secondary nav-action-btn"
           onClick={onManualSave}
           title="Guardar cambios manualmente"
         >
           <Save size={16} />
-          <span className="hide-mobile-sm">Guardar</span>
+          <span>Guardar</span>
         </button>
 
         <button
           type="button"
-          className="btn btn-secondary"
-          style={{ padding: '0.45rem 0.85rem', fontSize: '0.85rem', minHeight: '38px', borderColor: 'var(--accent-cyan)' }}
+          className="btn btn-secondary nav-action-btn"
+          style={{ borderColor: 'rgba(0, 242, 254, 0.4)' }}
           onClick={onOpenPublish}
           title="Publicar y generar código QR"
         >
           <Globe size={16} color="var(--accent-cyan)" />
-          <span className="hide-mobile-sm">Publicar</span>
+          <span>Publicar</span>
         </button>
 
         <button
           type="button"
-          className="btn btn-primary"
-          style={{ padding: '0.45rem 1rem', fontSize: '0.85rem', minHeight: '38px' }}
+          className="btn btn-primary nav-action-btn nav-action-btn-ar"
           onClick={() => window.open(`/ar/${projectSlug || 'demo'}`, '_blank')}
           title="Ejecutar experiencia en AR Player"
         >

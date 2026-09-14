@@ -164,7 +164,7 @@ export default function UploadAssetModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" style={{ maxWidth: '490px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" style={{ maxWidth: '490px' }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -275,14 +275,19 @@ export default function UploadAssetModal({
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
-            <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose}>
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.35rem' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ flex: 1, minHeight: '44px', fontSize: '0.85rem' }}
+              onClick={onClose}
+            >
               Cancelar
             </button>
             <button
               type="submit"
               className="btn btn-primary"
-              style={{ flex: 1 }}
+              style={{ flex: 1, minHeight: '44px', fontSize: '0.85rem' }}
               disabled={isUploading || (selectedType !== 'text' && !selectedFile)}
             >
               {isUploading ? <Loader2 size={16} className="animate-spin-slow" /> : <PlusCircle size={16} />}

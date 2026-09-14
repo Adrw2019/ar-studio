@@ -331,9 +331,17 @@ class StorageService {
     try {
       const match = url.match(/res\.cloudinary\.com\/[^/]+\/(image|video|raw)\/upload\/(?:v\d+\/)?(.+)$/);
       if (match) {
+        let publicId = decodeURIComponent(match[2]);
+        const resType = match[1];
+
+        // Cloudinary gestiona public_id sin extensión para 'image' y 'video', pero CON extensión para 'raw' (.glb, .mind)
+        if (resType === 'image' || resType === 'video') {
+          publicId = publicId.replace(/\.[^/.]+$/, '');
+        }
+
         return {
-          resource_type: match[1],
-          public_id: decodeURIComponent(match[2])
+          resource_type: resType,
+          public_id: publicId
         };
       }
     } catch (e) {

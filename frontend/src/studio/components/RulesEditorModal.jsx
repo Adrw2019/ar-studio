@@ -197,7 +197,7 @@ export default function RulesEditorModal({
           <button
             type="button"
             className="btn btn-secondary"
-            style={{ borderStyle: 'dashed' }}
+            style={{ borderStyle: 'dashed', minHeight: '44px' }}
             onClick={handleAddRule}
           >
             <Plus size={16} />
@@ -206,10 +206,10 @@ export default function RulesEditorModal({
         </div>
 
         <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-          <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose}>
+          <button type="button" className="btn btn-secondary" style={{ flex: 1, minHeight: '44px' }} onClick={onClose}>
             Cancelar
           </button>
-          <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={handleSave}>
+          <button type="button" className="btn btn-primary" style={{ flex: 1, minHeight: '44px' }} onClick={handleSave}>
             Guardar interacciones
           </button>
         </div>

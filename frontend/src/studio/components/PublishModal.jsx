@@ -134,11 +134,12 @@ export default function PublishModal({
             type="button"
             className={`btn ${isPublished ? 'btn-secondary' : 'btn-primary'}`}
             style={{
-              padding: '0.4rem 0.85rem',
-              fontSize: '0.8rem',
-              minHeight: '34px',
+              padding: '0.5rem 1rem',
+              fontSize: '0.85rem',
+              minHeight: '44px',
               opacity: !isPublished && !isTrackingReady ? 0.6 : 1,
-              cursor: !isPublished && !isTrackingReady ? 'not-allowed' : 'pointer'
+              cursor: !isPublished && !isTrackingReady ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap'
             }}
             disabled={!isPublished && !isTrackingReady}
             onClick={handleTogglePublish}
@@ -194,10 +195,11 @@ export default function PublishModal({
         </div>
 
         {/* Botones de acción */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
           <button
             type="button"
             className="btn btn-secondary"
+            style={{ minHeight: '44px', justifyContent: 'center' }}
             onClick={handleCopyLink}
           >
             {copied ? <Check size={16} color="var(--accent-green)" /> : <Copy size={16} />}
@@ -207,6 +209,7 @@ export default function PublishModal({
           <button
             type="button"
             className="btn btn-secondary"
+            style={{ minHeight: '44px', justifyContent: 'center' }}
             onClick={handleDownloadQR}
           >
             <Download size={16} />
@@ -217,7 +220,7 @@ export default function PublishModal({
         <button
           type="button"
           className="btn btn-primary"
-          style={{ width: '100%' }}
+          style={{ width: '100%', minHeight: '44px', justifyContent: 'center' }}
           onClick={() => window.open(publicUrl, '_blank')}
         >
           <ExternalLink size={16} />

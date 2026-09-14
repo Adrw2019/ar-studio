@@ -144,6 +144,7 @@ export default function StudioDashboard() {
         <button
           type="button"
           className="btn btn-primary"
+          style={{ minHeight: '44px' }}
           onClick={() => setIsCreating(true)}
         >
           <Plus size={18} fill="#050b14" />
@@ -278,19 +279,21 @@ export default function StudioDashboard() {
                     {/* Acciones Rápidas: Duplicar y Eliminar */}
                     <button
                       type="button"
-                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', marginLeft: 'auto' }}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', width: '38px', height: '38px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' }}
                       onClick={() => handleDuplicate(project.id)}
                       title="Duplicar este proyecto"
+                      aria-label="Duplicar proyecto"
                     >
-                      <Copy size={15} />
+                      <Copy size={16} />
                     </button>
                     <button
                       type="button"
-                      style={{ background: 'transparent', border: 'none', color: 'var(--accent-rose)', cursor: 'pointer', padding: '4px' }}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--accent-rose)', cursor: 'pointer', width: '38px', height: '38px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                       onClick={() => handleDelete(project.id, project.name)}
                       title="Eliminar este proyecto"
+                      aria-label="Eliminar proyecto"
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
@@ -317,12 +320,12 @@ export default function StudioDashboard() {
                 </div>
 
                 {/* Barra de Acciones del Proyecto (Editar, Abrir, QR, Publicar) */}
-                <div className="project-card-actions" style={{ gridTemplateColumns: '1.2fr 1fr auto auto' }}>
+                <div className="project-card-actions">
                   {/* 1. EDITAR */}
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    style={{ fontSize: '0.8rem', padding: '0.45rem' }}
+                    style={{ fontSize: '0.85rem', minHeight: '44px', padding: '0.45rem 0.75rem', justifyContent: 'center' }}
                     onClick={() => navigate(`/studio/project/${project.id}`)}
                     title="Abrir editor 3D del proyecto"
                   >
@@ -333,11 +336,11 @@ export default function StudioDashboard() {
                   <button
                     type="button"
                     className="btn btn-primary"
-                    style={{ fontSize: '0.8rem', padding: '0.45rem', backgroundColor: themeColor, borderColor: themeColor }}
+                    style={{ fontSize: '0.85rem', minHeight: '44px', padding: '0.45rem 0.75rem', backgroundColor: themeColor, borderColor: themeColor, justifyContent: 'center' }}
                     onClick={() => window.open(`/ar/${project.slug || project.id}`, '_blank')}
                     title="Ejecutar experiencia AR personalizada"
                   >
-                    <Play size={13} fill="#050b14" />
+                    <Play size={14} fill="#050b14" />
                     <span>Abrir</span>
                   </button>
 
@@ -345,22 +348,24 @@ export default function StudioDashboard() {
                   <button
                     type="button"
                     className="btn btn-secondary btn-icon"
-                    style={{ width: '34px', height: '34px', padding: 0 }}
+                    style={{ width: '44px', height: '44px', minWidth: '44px', padding: 0, justifyContent: 'center' }}
                     onClick={() => setActivePublishProject(project)}
                     title="Ver y descargar código QR del proyecto"
+                    aria-label="Código QR"
                   >
-                    <QrCode size={16} color="var(--accent-cyan)" />
+                    <QrCode size={18} color="var(--accent-cyan)" />
                   </button>
 
                   {/* 4. PUBLICAR */}
                   <button
                     type="button"
                     className="btn btn-secondary btn-icon"
-                    style={{ width: '34px', height: '34px', padding: 0 }}
+                    style={{ width: '44px', height: '44px', minWidth: '44px', padding: 0, justifyContent: 'center' }}
                     onClick={() => setActivePublishProject(project)}
                     title="Configurar publicación y URL pública"
+                    aria-label="Publicar proyecto"
                   >
-                    <Globe size={16} />
+                    <Globe size={18} />
                   </button>
                 </div>
               </div>
@@ -471,7 +476,7 @@ export default function StudioDashboard() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, minHeight: '44px' }}
                   onClick={() => setIsCreating(false)}
                 >
                   Cancelar
@@ -479,7 +484,7 @@ export default function StudioDashboard() {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, minHeight: '44px' }}
                 >
                   Crear y Diseñar
                 </button>

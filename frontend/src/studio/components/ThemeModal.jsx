@@ -49,7 +49,7 @@ export default function ThemeModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" style={{ maxWidth: '540px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" style={{ maxWidth: '540px' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <Palette size={22} color={primaryColor} />
@@ -215,10 +215,20 @@ export default function ThemeModal({
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-            <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ flex: 1, minHeight: '44px', fontSize: '0.85rem' }}
+              onClick={onClose}
+            >
               Cancelar
             </button>
-            <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={handleSave}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ flex: 1, minHeight: '44px', fontSize: '0.85rem' }}
+              onClick={handleSave}
+            >
               Guardar Apariencia
             </button>
           </div>

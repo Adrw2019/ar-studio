@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RotateCw, Grid, Sparkles, AlertTriangle, Loader2 } from 'lucide-react';
 
 export default function Viewport3D({
+  className = '',
   activeAsset,
   activeMarker,
   onTransformChange
@@ -135,17 +136,27 @@ export default function Viewport3D({
     };
     animate();
 
-    // Resize handler
+    // Resize handler con ResizeObserver y window.resize
     const handleResize = () => {
       if (!container || !renderer || !camera) return;
-      camera.aspect = container.clientWidth / container.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(container.clientWidth, container.clientHeight);
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      if (width > 0 && height > 0) {
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+      }
     };
+
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+    resizeObserver.observe(container);
     window.addEventListener('resize', handleResize);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
@@ -364,7 +375,7 @@ export default function Viewport3D({
   };
 
   return (
-    <div className="editor-viewport-center" style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div className={`editor-viewport-center ${className}`.trim()} style={{ width: '100%', height: '100%', position: 'relative' }}>
       {/* Contenedor WebGL Canvas */}
       <div ref={mountRef} style={{ width: '100%', height: '100%', outline: 'none' }} />
 

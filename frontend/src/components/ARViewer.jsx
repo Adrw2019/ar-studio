@@ -34,28 +34,70 @@ export default function ARViewer({
 
     if (propMarkers && propMarkers.length > 0) {
       resolvedMarkers = propMarkers.map((m, idx) => {
-        const associatedAsset = (propAssets || []).find(a => a.marker_id === m.id) || (propAssets || [])[idx] || {};
+        const markerId = m.id || `marker-${idx}`;
+        const targetIndex = m.target_index !== undefined ? parseInt(m.target_index, 10) : idx;
+
+        // Filtrar TODOS los assets asociados a esta tarjeta física
+        let associatedAssets = (propAssets || []).filter(a => {
+          if (a.marker_id && m.id) {
+            return String(a.marker_id) === String(m.id);
+          }
+          return false;
+        });
+
+        // Fallbacks defensivos si no hay coincidencia estricta por marker_id
+        if (associatedAssets.length === 0) {
+          if ((propMarkers || []).length === 1 && (propAssets || []).length > 0) {
+            associatedAssets = propAssets;
+          } else if (propAssets && propAssets[idx]) {
+            associatedAssets = [propAssets[idx]];
+          }
+        }
+
+        const normalizedAssets = associatedAssets.map((a, aIdx) => {
+          const rawUrl = (a.file_url || a.url || a.asset_url || a.model_url || '').trim();
+          const isExternal = rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('data:') || rawUrl.startsWith('blob:');
+          const finalUrl = (isExternal || !rawUrl) ? rawUrl : resolveAssetPath(rawUrl);
+
+          return {
+            id: a.id || `asset-${idx}-${aIdx}`,
+            marker_id: a.marker_id || markerId,
+            type: (a.type || 'model3d').toLowerCase(),
+            file_url: finalUrl,
+            name: a.configuration?.title || a.name || (finalUrl ? finalUrl.split('/').pop() : 'Modelo 3D'),
+            position: [
+              parseFloat(a.position_x ?? 0),
+              parseFloat(a.position_y ?? 0),
+              parseFloat(a.position_z ?? 0)
+            ],
+            rotation: [
+              parseFloat(a.rotation_x ?? 0) * (Math.PI / 180),
+              parseFloat(a.rotation_y ?? 0) * (Math.PI / 180),
+              parseFloat(a.rotation_z ?? 0) * (Math.PI / 180)
+            ],
+            scale: [
+              parseFloat(a.scale_x ?? 0.75),
+              parseFloat(a.scale_y ?? 0.75),
+              parseFloat(a.scale_z ?? 0.75)
+            ],
+            configuration: a.configuration || {}
+          };
+        });
+
+        const primaryAsset = normalizedAssets[0] || {};
+
         return {
-          id: m.id || idx,
-          name: m.name,
-          targetIndex: m.target_index ?? idx,
-          modelUrl: resolveAssetPath(associatedAsset.file_url || 'models/motor.glb'),
-          scale: [
-            parseFloat(associatedAsset.scale_x ?? 0.75),
-            parseFloat(associatedAsset.scale_y ?? 0.75),
-            parseFloat(associatedAsset.scale_z ?? 0.75)
-          ],
-          position: [
-            parseFloat(associatedAsset.position_x ?? 0),
-            parseFloat(associatedAsset.position_y ?? 0),
-            parseFloat(associatedAsset.position_z ?? 0)
-          ],
-          rotation: [
-            parseFloat(associatedAsset.rotation_x ?? 0) * (Math.PI / 180),
-            parseFloat(associatedAsset.rotation_y ?? 0) * (Math.PI / 180),
-            parseFloat(associatedAsset.rotation_z ?? 0) * (Math.PI / 180)
-          ],
-          info: associatedAsset.configuration || {
+          id: markerId,
+          name: m.name || `Tarjeta ${idx + 1}`,
+          targetIndex,
+          targetImage: m.target_image || m.target_image_url || '',
+          description: m.description || '',
+          assets: normalizedAssets,
+          modelUrl: primaryAsset.file_url || '',
+          scale: primaryAsset.scale || [0.75, 0.75, 0.75],
+          position: primaryAsset.position || [0, 0, 0],
+          rotation: primaryAsset.rotation || [0, 0, 0],
+          info: primaryAsset.configuration || {
             title: m.name,
             description: m.description || 'Elemento de Realidad Aumentada interactivo.'
           }
@@ -125,13 +167,16 @@ export default function ARViewer({
           sceneManager,
           onObjectTouched: (markerName, userData) => {
             const markerConfig = resolvedMarkers.find(m => m.name === markerName) || {
-              name: markerName,
-              info: {
-                title: markerName,
-                description: 'Elemento de Realidad Aumentada interactivo.'
-              }
+              name: markerName
             };
-            onObjectTouched(markerConfig);
+            const touchedInfo = userData?.info || userData?.asset?.configuration || markerConfig.info || {
+              title: markerName,
+              description: 'Elemento de Realidad Aumentada interactivo.'
+            };
+            onObjectTouched({
+              ...markerConfig,
+              info: touchedInfo
+            });
           },
           onInteractionTriggered: (rule) => {
             onInteractionChange({
@@ -150,12 +195,12 @@ export default function ARViewer({
         });
         interactionManagerRef.current = interactionManager;
 
-        // 5. Configurar cada marcador
+        // 5. Configurar cada marcador y cargar TODOS sus contenidos reales
         for (const markerConfig of resolvedMarkers) {
           const anchor = mindarManager.addAnchor(markerConfig.targetIndex);
 
-          // Cargar modelo 3D o procedural
-          await sceneManager.loadModelForMarker(markerConfig, anchor.group);
+          // Cargar todos los assets reales del marcador en su anchor
+          await sceneManager.loadAssetsForMarker(markerConfig, anchor.group);
 
           // Listeners de anclaje
           anchor.onTargetFound = () => {

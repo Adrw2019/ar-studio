@@ -225,5 +225,21 @@ export const apiService = {
       console.error(`Error al subir targets.mind para proyecto ${id}:`, err.message);
       throw err;
     }
+  },
+
+  /**
+   * Eliminar un asset o contenido digital por ID (PostgreSQL Neon + Cloudinary)
+   */
+  async deleteAsset(id) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/assets/${id}`, {
+        method: 'DELETE'
+      });
+      const data = await parseResponse(res);
+      return data;
+    } catch (err) {
+      console.error(`Error al eliminar contenido digital ${id}:`, err.message);
+      throw err;
+    }
   }
 };

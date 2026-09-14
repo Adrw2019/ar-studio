@@ -4,6 +4,7 @@
  */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { resolveAssetPath } from '../utils/paths';
 
 export class SceneManager {
   constructor(scene, camera, renderer) {
@@ -43,70 +44,246 @@ export class SceneManager {
   }
 
   /**
-   * Carga un modelo 3D GLB en el anclaje o genera un modelo procedural educativo
+   * Carga todos los assets asociados a un marcador en su anchorGroup de MindAR.
+   * Soporta múltiples assets por tarjeta (model3d, image, text, video, audio).
+   * Respeta transformaciones guardadas en el editor: position, rotation, scale.
    */
-  async loadModelForMarker(markerConfig, anchorGroup) {
-    const { name, modelUrl, scale = [1, 1, 1], position = [0, 0, 0], rotation = [0, 0, 0] } = markerConfig;
+  async loadAssetsForMarker(markerConfig, anchorGroup) {
+    const assets = markerConfig.assets || [];
+    const markerName = markerConfig.name || 'Tarjeta';
 
-    const wrapperGroup = new THREE.Group();
-    wrapperGroup.name = `marker-model-${name}`;
-    wrapperGroup.userData = {
+    // Si no hay assets configurados y es un marcador demo, soportar procedural didáctico
+    if (assets.length === 0) {
+      if (markerName.toLowerCase() === 'motor' || markerName.toLowerCase().includes('energ')) {
+        const demoModel = this.createProceduralModel(markerName);
+        const wrapper = new THREE.Group();
+        wrapper.name = `marker-model-${markerName}`;
+        wrapper.userData = {
+          markerConfig,
+          initialScale: new THREE.Vector3(0.75, 0.75, 0.75),
+          targetScale: new THREE.Vector3(0.75, 0.75, 0.75),
+          isScaling: false
+        };
+        wrapper.add(demoModel);
+        anchorGroup.add(wrapper);
+        this.animatedObjects.push({
+          group: wrapper,
+          type: 'procedural',
+          name: markerName,
+          model: demoModel
+        });
+      } else {
+        console.info(`[SceneManager] Marcador "${markerName}" no tiene contenido digital configurado.`);
+      }
+      return;
+    }
+
+    // Cargar todos los assets asignados a esta tarjeta
+    for (const asset of assets) {
+      await this.loadSingleAsset(markerConfig, asset, anchorGroup);
+    }
+  }
+
+  /**
+   * Carga un único asset digital (3D GLB, imagen, texto didáctico, etc.)
+   */
+  async loadSingleAsset(markerConfig, asset, anchorGroup) {
+    const markerName = markerConfig.name || 'Tarjeta';
+    const assetId = asset.id || `asset-${Date.now()}`;
+    const assetType = (asset.type || 'model3d').toLowerCase();
+
+    // Transformaciones exactas guardadas por el editor
+    const position = asset.position || [
+      parseFloat(asset.position_x ?? 0),
+      parseFloat(asset.position_y ?? 0),
+      parseFloat(asset.position_z ?? 0)
+    ];
+
+    const rotation = asset.rotation || [
+      THREE.MathUtils.degToRad(parseFloat(asset.rotation_x ?? 0)),
+      THREE.MathUtils.degToRad(parseFloat(asset.rotation_y ?? 0)),
+      THREE.MathUtils.degToRad(parseFloat(asset.rotation_z ?? 0))
+    ];
+
+    const scale = asset.scale || [
+      parseFloat(asset.scale_x ?? 0.75),
+      parseFloat(asset.scale_y ?? 0.75),
+      parseFloat(asset.scale_z ?? 0.75)
+    ];
+
+    const assetGroup = new THREE.Group();
+    assetGroup.name = `marker-model-${markerName}-${assetId}`;
+    assetGroup.position.set(position[0], position[1], position[2]);
+    assetGroup.rotation.set(rotation[0], rotation[1], rotation[2]);
+    assetGroup.scale.set(scale[0], scale[1], scale[2]);
+    assetGroup.userData = {
       markerConfig,
+      asset,
+      markerName,
+      assetId,
       initialScale: new THREE.Vector3(...scale),
       targetScale: new THREE.Vector3(...scale),
-      isScaling: false
+      isScaling: false,
+      info: asset.configuration || {
+        title: asset.name || markerName,
+        description: markerConfig.description || 'Elemento didáctico interactivo.'
+      }
     };
 
-    anchorGroup.add(wrapperGroup);
+    anchorGroup.add(assetGroup);
 
-    // Intentar cargar modelo GLB
-    try {
-      if (modelUrl) {
-        const gltf = await this.loadGLTF(modelUrl);
+    // ==========================================
+    // A) MODELO 3D REAL (GLB / GLTF)
+    // ==========================================
+    if (assetType === 'model3d' || assetType === 'model') {
+      const fileUrl = (asset.file_url || asset.url || asset.asset_url || asset.model_url || '').trim();
+
+      if (!fileUrl) {
+        console.warn(`[SceneManager] Asset 3D (${assetId}) no tiene URL de archivo.`);
+        return;
+      }
+
+      const isExternal = fileUrl.startsWith('http://') || fileUrl.startsWith('https://') || fileUrl.startsWith('data:') || fileUrl.startsWith('blob:');
+      const resolvedUrl = isExternal ? fileUrl : resolveAssetPath(fileUrl);
+
+      try {
+        const gltf = await this.loadGLTF(resolvedUrl);
         const model = gltf.scene;
-        model.scale.set(...scale);
-        model.position.set(...position);
-        model.rotation.set(...rotation);
-        
-        // Habilitar sombras y materiales brillantes
+
+        // Activar sombras y metadatos de interacción táctil
         model.traverse((node) => {
           if (node.isMesh) {
             node.castShadow = true;
             node.receiveShadow = true;
             node.userData.interactive = true;
-            node.userData.markerName = name;
+            node.userData.markerName = markerName;
+            node.userData.asset = asset;
+            node.userData.info = assetGroup.userData.info;
           }
         });
 
-        wrapperGroup.add(model);
+        // Centrar la geometría del modelo en X y Z y asentar la base en Y = 0 (exactamente igual que Viewport3D)
+        const bbox = new THREE.Box3().setFromObject(model);
+        if (!bbox.isEmpty()) {
+          const center = bbox.getCenter(new THREE.Vector3());
+          model.position.x = -center.x;
+          model.position.z = -center.z;
+          model.position.y = -bbox.min.y;
+        }
+
+        assetGroup.add(model);
+
+        let mixer = null;
+        if (gltf.animations && gltf.animations.length > 0) {
+          mixer = new THREE.AnimationMixer(model);
+          gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
+        }
+
         this.animatedObjects.push({
-          group: wrapperGroup,
+          group: assetGroup,
           type: 'glb',
           model,
-          mixer: gltf.animations && gltf.animations.length > 0 ? new THREE.AnimationMixer(model) : null,
+          mixer,
           animations: gltf.animations
         });
-        return wrapperGroup;
+      } catch (err) {
+        // NUNCA utilizar un cubo morado ante un error de carga de GLB
+        console.error('Error cargando GLB real:', resolvedUrl, err);
+
+        // Si es proyecto demo de prueba ("Motor" o "Energía"), permitir respaldo didáctico
+        if (markerName.toLowerCase() === 'motor' || markerName.toLowerCase().includes('energ')) {
+          const proceduralModel = this.createProceduralModel(markerName);
+          assetGroup.add(proceduralModel);
+          this.animatedObjects.push({
+            group: assetGroup,
+            type: 'procedural',
+            name: markerName,
+            model: proceduralModel
+          });
+        } else {
+          // Para proyectos de usuario: mostrar mensaje entendible de error en 3D
+          const errorBoard = this.createErrorBoardMesh('No se pudo cargar el contenido 3D');
+          assetGroup.add(errorBoard);
+        }
       }
-    } catch (err) {
-      console.info(`[SceneManager] Modelo GLB no encontrado en ${modelUrl}. Utilizando modelo procedural de alta fidelidad para "${name}".`);
+    }
+    // ==========================================
+    // B) IMAGEN DIGITAL SUPERPUESTA
+    // ==========================================
+    else if (assetType === 'image') {
+      const fileUrl = (asset.file_url || asset.url || '').trim();
+      if (fileUrl) {
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.load(
+          fileUrl,
+          (texture) => {
+            texture.colorSpace = THREE.SRGBColorSpace;
+            const aspect = (texture.image?.width || 1) / (texture.image?.height || 1);
+            const geo = new THREE.PlaneGeometry(0.8 * aspect, 0.8);
+            const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.y = 0.45;
+            mesh.rotation.x = -Math.PI / 6;
+            mesh.userData.interactive = true;
+            mesh.userData.markerName = markerName;
+            assetGroup.add(mesh);
+          },
+          undefined,
+          (err) => console.error('[SceneManager] Error cargando imagen:', fileUrl, err)
+        );
+      }
+    }
+    // ==========================================
+    // C) TEXTO EDUCATIVO (Holograma didáctico)
+    // ==========================================
+    else if (assetType === 'text') {
+      const title = asset.configuration?.title || asset.name || 'Información';
+      const desc = asset.configuration?.description || 'Contenido didáctico para la experiencia de Realidad Aumentada.';
+      const textMesh = this.createTextBoardMesh(title, desc);
+      textMesh.userData.interactive = true;
+      textMesh.userData.markerName = markerName;
+      assetGroup.add(textMesh);
+    }
+    // ==========================================
+    // D) AUDIO DIDÁCTICO
+    // ==========================================
+    else if (assetType === 'audio') {
+      const title = asset.configuration?.title || 'Audio Didáctico';
+      const audioBadge = this.createAudioBadgeMesh(title);
+      audioBadge.userData.interactive = true;
+      audioBadge.userData.markerName = markerName;
+      assetGroup.add(audioBadge);
+    }
+    // ==========================================
+    // E) VIDEO DIGITAL
+    // ==========================================
+    else if (assetType === 'video') {
+      const title = asset.configuration?.title || 'Video';
+      const videoBoard = this.createVideoPlaceholderMesh(title);
+      videoBoard.userData.interactive = true;
+      videoBoard.userData.markerName = markerName;
+      assetGroup.add(videoBoard);
+    }
+  }
+
+  /**
+   * Retrocompatibilidad con implementaciones previas
+   */
+  async loadModelForMarker(markerConfig, anchorGroup) {
+    if (markerConfig.assets && markerConfig.assets.length > 0) {
+      return this.loadAssetsForMarker(markerConfig, anchorGroup);
     }
 
-    // Modelo procedural de respaldo educativo
-    const proceduralModel = this.createProceduralModel(name);
-    proceduralModel.scale.set(...scale);
-    proceduralModel.position.set(...position);
-    proceduralModel.rotation.set(...rotation);
-    
-    wrapperGroup.add(proceduralModel);
-    this.animatedObjects.push({
-      group: wrapperGroup,
-      type: 'procedural',
-      name,
-      model: proceduralModel
-    });
-
-    return wrapperGroup;
+    const legacyAsset = {
+      id: markerConfig.id || 'legacy-asset',
+      type: 'model3d',
+      file_url: markerConfig.modelUrl,
+      position: markerConfig.position,
+      rotation: markerConfig.rotation,
+      scale: markerConfig.scale,
+      configuration: markerConfig.info
+    };
+    return this.loadSingleAsset(markerConfig, legacyAsset, anchorGroup);
   }
 
   /**
@@ -124,7 +301,165 @@ export class SceneManager {
   }
 
   /**
-   * Genera modelos 3D procedurales didácticos con Three.js
+   * Panel 3D claro y entendible cuando un archivo 3D no puede cargarse
+   */
+  createErrorBoardMesh(message = 'No se pudo cargar el contenido 3D') {
+    const group = new THREE.Group();
+    group.name = 'error-indicator-board';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 180;
+    const ctx = canvas.getContext('2d');
+
+    // Fondo estilo HUD de advertencia
+    ctx.fillStyle = 'rgba(24, 18, 24, 0.92)';
+    ctx.beginPath();
+    ctx.roundRect(10, 10, 492, 160, 20);
+    ctx.fill();
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Ícono y título
+    ctx.fillStyle = '#ef4444';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚠ Error en Contenido 3D', 256, 65);
+
+    // Mensaje
+    ctx.fillStyle = '#fca5a5';
+    ctx.font = '20px sans-serif';
+    ctx.fillText(message, 256, 115);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const planeGeo = new THREE.PlaneGeometry(1.0, 0.35);
+    const planeMat = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+    const mesh = new THREE.Mesh(planeGeo, planeMat);
+    mesh.position.y = 0.4;
+    mesh.rotation.x = -Math.PI / 8;
+    group.add(mesh);
+
+    return group;
+  }
+
+  /**
+   * Panel didáctico en 3D para textos educativos
+   */
+  createTextBoardMesh(title, desc) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 320;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.roundRect(10, 10, 492, 300, 24);
+    ctx.fill();
+    ctx.strokeStyle = '#00f2fe';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    ctx.fillStyle = '#00f2fe';
+    ctx.font = 'bold 32px sans-serif';
+    ctx.fillText(title, 36, 68);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '22px sans-serif';
+    const words = (desc || '').split(' ');
+    let line = '';
+    let y = 120;
+    for (const w of words) {
+      const testLine = line + w + ' ';
+      if (ctx.measureText(testLine).width > 440) {
+        ctx.fillText(line, 36, y);
+        line = w + ' ';
+        y += 34;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, 36, y);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const geo = new THREE.PlaneGeometry(1.2, 0.75);
+    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.y = 0.45;
+    mesh.rotation.x = -Math.PI / 8;
+    return mesh;
+  }
+
+  /**
+   * Badge 3D para audio didáctico
+   */
+  createAudioBadgeMesh(title) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 380;
+    canvas.height = 120;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.roundRect(8, 8, 364, 104, 16);
+    ctx.fill();
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.fillStyle = '#10b981';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`🔊 ${title}`, 190, 68);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const geo = new THREE.PlaneGeometry(0.85, 0.28);
+    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.y = 0.45;
+    return mesh;
+  }
+
+  /**
+   * Placeholder 3D para video
+   */
+  createVideoPlaceholderMesh(title) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 480;
+    canvas.height = 270;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#080b11';
+    ctx.beginPath();
+    ctx.roundRect(8, 8, 464, 254, 16);
+    ctx.fill();
+    ctx.strokeStyle = '#8a2be2';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 26px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`▶ ${title}`, 240, 145);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const geo = new THREE.PlaneGeometry(1.1, 0.62);
+    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.y = 0.45;
+    return mesh;
+  }
+
+  /**
+   * Genera modelos 3D procedurales didácticos para el laboratorio de demostración (Motor y Energía)
    */
   createProceduralModel(type) {
     const root = new THREE.Group();
@@ -270,17 +605,6 @@ export class SceneManager {
       const terminalMesh = new THREE.Mesh(terminalGeo, terminalMat);
       terminalMesh.position.y = 1.05;
       root.add(terminalMesh);
-    } else {
-      // Geometría genérica de alta fidelidad
-      const cubeGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-      const cubeMat = new THREE.MeshStandardMaterial({
-        color: 0x8a2be2,
-        roughness: 0.2,
-        metalness: 0.8
-      });
-      const cube = new THREE.Mesh(cubeGeo, cubeMat);
-      cube.position.y = 0.4;
-      root.add(cube);
     }
 
     // Marcar todos los sub-meshes como interactivos

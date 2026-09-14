@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sliders, Move, RotateCw, Scaling, FileText, Sparkles, ChevronDown, ChevronRight, HelpCircle } from 'lucide-react';
 
 export default function InspectorPanel({
+  className = '',
   selectedMarker,
   selectedAsset,
   onUpdateMarker,
@@ -12,7 +13,7 @@ export default function InspectorPanel({
 
   if (!selectedMarker && !selectedAsset) {
     return (
-      <aside className="editor-panel-right">
+      <aside className={`editor-panel-right ${className}`.trim()}>
         <div className="panel-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Sliders size={16} color="var(--accent-cyan)" />
@@ -60,7 +61,7 @@ export default function InspectorPanel({
   if (selectedAsset?.type === 'text') typeLabel = 'Texto';
 
   return (
-    <aside className="editor-panel-right">
+    <aside className={`editor-panel-right ${className}`.trim()}>
       <div className="panel-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Sliders size={16} color="var(--accent-cyan)" />

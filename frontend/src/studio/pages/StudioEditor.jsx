@@ -317,6 +317,37 @@ export default function StudioEditor() {
     triggerAutoSave(updated);
   };
 
+  const handleDeleteAsset = async (assetId) => {
+    if (!project) return;
+
+    // 1. Quitar inmediatamente el asset del estado local del proyecto
+    const remainingAssets = (project.assets || []).filter(a => a.id !== assetId);
+
+    // 2. Si era el asset activo: seleccionar otro asset si existe en la tarjeta o dejar en null
+    if (selectedAssetId === assetId) {
+      const activeMarkerId = selectedMarkerId || (project.markers && project.markers[0] ? project.markers[0].id : null);
+      const siblingAssets = remainingAssets.filter(a => a.marker_id === activeMarkerId);
+      setSelectedAssetId(siblingAssets.length > 0 ? siblingAssets[0].id : null);
+    }
+
+    const updatedProject = {
+      ...project,
+      assets: remainingAssets
+    };
+
+    setProject(updatedProject);
+
+    // 3. Eliminar de PostgreSQL Neon y Cloudinary vía API
+    try {
+      await apiService.deleteAsset(assetId);
+    } catch (err) {
+      console.warn('[StudioEditor] Error al eliminar asset en backend:', err);
+    }
+
+    // 4. Disparar autoguardado del estado del proyecto
+    triggerAutoSave(updatedProject);
+  };
+
   const handleSaveInteractions = (newInteractions) => {
     if (!project) return;
     triggerAutoSave({ ...project, interactions: newInteractions });
@@ -333,9 +364,8 @@ export default function StudioEditor() {
 
   // Elementos activos
   const activeMarker = (project.markers || []).find(m => m.id === selectedMarkerId) || (project.markers || [])[0];
-  const activeAsset = (project.assets || []).find(a => a.id === selectedAssetId) ||
-                      (project.assets || []).find(a => a.marker_id === selectedMarkerId) ||
-                      (project.assets || [])[0];
+  const markerAssets = (project.assets || []).filter(a => activeMarker && a.marker_id === activeMarker.id);
+  const activeAsset = markerAssets.find(a => a.id === selectedAssetId) || markerAssets[0] || null;
 
   return (
     <div className="editor-layout">
@@ -351,7 +381,8 @@ export default function StudioEditor() {
       />
 
       {/* 2. Guía de Flujo Discreto para Estudiantes */}
-      <div className="editor-stepper">
+      {/* Versión PC (>= 1024px) */}
+      <div className="editor-stepper editor-stepper-desktop">
         <div className="stepper-item active">
           <span className="stepper-num">1</span>
           <span>Tarjeta</span>
@@ -378,49 +409,64 @@ export default function StudioEditor() {
         </div>
       </div>
 
+      {/* Versión Móvil (< 1024px): Stepper compacto con scroll horizontal suave */}
+      <div className="editor-stepper-mobile">
+        <div className="stepper-mobile-scroll">
+          <button
+            type="button"
+            className={`stepper-pill ${mobileActiveTab === 'elements' ? 'active' : ''}`}
+            onClick={() => setMobileActiveTab('elements')}
+          >
+            1. Tarjetas ({(project.markers || []).length})
+          </button>
+          <button
+            type="button"
+            className={`stepper-pill ${mobileActiveTab === 'viewport' ? 'active' : ''}`}
+            onClick={() => setMobileActiveTab('viewport')}
+          >
+            2. Vista previa
+          </button>
+          <button
+            type="button"
+            className={`stepper-pill ${mobileActiveTab === 'inspector' ? 'active' : ''}`}
+            onClick={() => setMobileActiveTab('inspector')}
+          >
+            3. Propiedades
+          </button>
+          <button
+            type="button"
+            className="stepper-pill"
+            onClick={() => setIsThemeModalOpen(true)}
+          >
+            4. Apariencia
+          </button>
+          <button
+            type="button"
+            className="stepper-pill"
+            onClick={() => setIsPublishModalOpen(true)}
+          >
+            5. Publicar / QR
+          </button>
+        </div>
+      </div>
+
       {/* 2.5 Barra de Estado de Preparación de Tarjetas MindAR */}
       <div
-        className="target-compilation-bar"
-        style={{
-          margin: '0.4rem 1.25rem 0.6rem 1.25rem',
-          padding: '0.65rem 1.25rem',
-          borderRadius: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '0.75rem',
-          background: project.tracking_status === 'ready'
-            ? 'rgba(16, 185, 129, 0.08)'
-            : (project.tracking_status === 'compiling' || isCompiling)
-            ? 'rgba(0, 242, 254, 0.08)'
-            : project.tracking_status === 'error'
-            ? 'rgba(244, 63, 94, 0.1)'
-            : 'rgba(245, 158, 11, 0.08)',
-          border: `1px solid ${
-            project.tracking_status === 'ready'
-              ? 'rgba(16, 185, 129, 0.35)'
-              : (project.tracking_status === 'compiling' || isCompiling)
-              ? 'rgba(0, 242, 254, 0.35)'
-              : project.tracking_status === 'error'
-              ? 'rgba(244, 63, 94, 0.35)'
-              : 'rgba(245, 158, 11, 0.35)'
-          }`
-        }}
+        className={`target-compilation-bar status-${project.tracking_status || 'pending'}`}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+        <div className="target-compilation-info">
           {project.tracking_status === 'ready' ? (
-            <CheckCircle2 size={20} color="#10b981" />
+            <CheckCircle2 size={20} color="#10b981" style={{ flexShrink: 0 }} />
           ) : (project.tracking_status === 'compiling' || isCompiling) ? (
-            <RefreshCw size={20} color="var(--accent-cyan)" className="animate-spin-slow" />
+            <RefreshCw size={20} color="var(--accent-cyan)" className="animate-spin-slow" style={{ flexShrink: 0 }} />
           ) : project.tracking_status === 'error' ? (
-            <AlertTriangle size={20} color="#f43f5e" />
+            <AlertTriangle size={20} color="#f43f5e" style={{ flexShrink: 0 }} />
           ) : (
-            <AlertTriangle size={20} color="#f59e0b" />
+            <AlertTriangle size={20} color="#f59e0b" style={{ flexShrink: 0 }} />
           )}
 
           <div>
-            <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#ffffff' }}>
+            <div className="target-compilation-title">
               {project.tracking_status === 'ready'
                 ? 'Tarjetas listas para AR'
                 : (project.tracking_status === 'compiling' || isCompiling)
@@ -429,9 +475,9 @@ export default function StudioEditor() {
                 ? 'No se pudieron preparar las tarjetas'
                 : 'Las tarjetas aún no están preparadas'}
             </div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+            <div className="target-compilation-desc">
               {project.tracking_status === 'ready'
-                ? `Archivo de seguimiento visual compilado y listo para la cámara.`
+                ? 'Archivo de seguimiento visual compilado y listo para la cámara.'
                 : (project.tracking_status === 'compiling' || isCompiling)
                 ? `Extrayendo características visuales con MindAR en el navegador ${compileProgress > 0 ? `(${compileProgress}%)` : ''}...`
                 : project.tracking_status === 'error'
@@ -441,12 +487,12 @@ export default function StudioEditor() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="target-compilation-actions">
           {project.tracking_status === 'error' && (
             <button
               type="button"
               className="btn btn-secondary"
-              style={{ fontSize: '0.76rem', padding: '0.35rem 0.65rem', minHeight: '32px' }}
+              style={{ fontSize: '0.78rem', padding: '0.35rem 0.65rem', minHeight: '36px' }}
               onClick={() => setShowErrorDetailModal(true)}
             >
               <span>Ver detalle</span>
@@ -457,10 +503,10 @@ export default function StudioEditor() {
             type="button"
             className="btn btn-primary"
             style={{
-              fontSize: '0.8rem',
-              padding: '0.45rem 0.95rem',
+              fontSize: '0.82rem',
+              padding: '0.5rem 1rem',
               fontWeight: 700,
-              minHeight: '34px',
+              minHeight: '40px',
               backgroundColor: project.tracking_status === 'ready' ? 'transparent' : 'var(--accent-cyan)',
               color: project.tracking_status === 'ready' ? '#10b981' : '#050b14',
               borderColor: project.tracking_status === 'ready' ? 'rgba(16, 185, 129, 0.4)' : 'var(--accent-cyan)'
@@ -476,7 +522,7 @@ export default function StudioEditor() {
             ) : project.tracking_status === 'ready' ? (
               <>
                 <RefreshCw size={14} />
-                <span>Recompilar tarjetas</span>
+                <span>Recompilar</span>
               </>
             ) : project.tracking_status === 'error' ? (
               <>
@@ -496,40 +542,40 @@ export default function StudioEditor() {
       {/* 3. Área de Trabajo Principal */}
       <div className="editor-workspace">
         {/* Panel Izquierdo: Elementos */}
-        <div className={`editor-panel-left ${mobileActiveTab === 'elements' ? 'tab-active' : ''}`}>
-          <ElementsPanel
-            markers={project.markers || []}
-            assets={project.assets || []}
-            interactions={project.interactions || []}
-            selectedMarkerId={selectedMarkerId}
-            selectedAssetId={selectedAssetId}
-            projectId={project?.id}
-            onSelectMarker={handleSelectMarker}
-            onSelectAsset={handleSelectAsset}
-            onAddMarker={handleAddMarker}
-            onDeleteMarker={handleDeleteMarker}
-            onUpdateMarker={handleUpdateMarker}
-            onOpenUploadModal={(markerId) => setUploadModalTargetMarkerId(markerId)}
-            onOpenRulesModal={() => setIsRulesModalOpen(true)}
-          />
-        </div>
+        <ElementsPanel
+          className={mobileActiveTab === 'elements' ? 'tab-active' : ''}
+          markers={project.markers || []}
+          assets={project.assets || []}
+          interactions={project.interactions || []}
+          selectedMarkerId={selectedMarkerId}
+          selectedAssetId={selectedAssetId}
+          projectId={project?.id}
+          onSelectMarker={handleSelectMarker}
+          onSelectAsset={handleSelectAsset}
+          onAddMarker={handleAddMarker}
+          onDeleteMarker={handleDeleteMarker}
+          onDeleteAsset={handleDeleteAsset}
+          onUpdateMarker={handleUpdateMarker}
+          onOpenUploadModal={(markerId) => setUploadModalTargetMarkerId(markerId)}
+          onOpenRulesModal={() => setIsRulesModalOpen(true)}
+        />
 
-        {/* Área Central: Previsualizador 3D con OrbitControls (Sin cámara requerida) */}
+        {/* Área Central: Previsualizador 3D con OrbitControls */}
         <Viewport3D
+          className={mobileActiveTab === 'viewport' ? 'tab-active' : ''}
           activeAsset={activeAsset}
           activeMarker={activeMarker}
           onTransformChange={(updated) => handleUpdateAsset(activeAsset?.id, updated)}
         />
 
         {/* Panel Derecho: Inspector de Propiedades */}
-        <div className={`editor-panel-right ${mobileActiveTab === 'inspector' ? 'tab-active' : ''}`}>
-          <InspectorPanel
-            selectedMarker={activeMarker}
-            selectedAsset={activeAsset}
-            onUpdateMarker={handleUpdateMarker}
-            onUpdateAsset={handleUpdateAsset}
-          />
-        </div>
+        <InspectorPanel
+          className={mobileActiveTab === 'inspector' ? 'tab-active' : ''}
+          selectedMarker={activeMarker}
+          selectedAsset={activeAsset}
+          onUpdateMarker={handleUpdateMarker}
+          onUpdateAsset={handleUpdateAsset}
+        />
       </div>
 
       {/* 4. Barra de Pestañas Inferior para Tablet y Celular */}
@@ -537,9 +583,10 @@ export default function StudioEditor() {
         <button
           type="button"
           className={`mobile-tab-btn ${mobileActiveTab === 'elements' ? 'active' : ''}`}
-          onClick={() => setMobileActiveTab(mobileActiveTab === 'elements' ? 'viewport' : 'elements')}
+          onClick={() => setMobileActiveTab('elements')}
+          aria-label="Ver tarjetas y contenido digital"
         >
-          <Layers size={18} />
+          <Layers size={20} />
           <span>Tarjetas</span>
         </button>
 
@@ -547,17 +594,19 @@ export default function StudioEditor() {
           type="button"
           className={`mobile-tab-btn ${mobileActiveTab === 'viewport' ? 'active' : ''}`}
           onClick={() => setMobileActiveTab('viewport')}
+          aria-label="Ver vista previa 3D"
         >
-          <Eye size={18} />
+          <Eye size={20} />
           <span>Vista previa</span>
         </button>
 
         <button
           type="button"
           className={`mobile-tab-btn ${mobileActiveTab === 'inspector' ? 'active' : ''}`}
-          onClick={() => setMobileActiveTab(mobileActiveTab === 'inspector' ? 'viewport' : 'inspector')}
+          onClick={() => setMobileActiveTab('inspector')}
+          aria-label="Ver propiedades del elemento"
         >
-          <Sliders size={18} />
+          <Sliders size={20} />
           <span>Propiedades</span>
         </button>
       </nav>

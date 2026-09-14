@@ -3,6 +3,7 @@ import { Layers, Plus, Box, Image, Volume2, Video, Type, Trash2, Zap, Upload, He
 import { apiService } from '../../services/api';
 
 export default function ElementsPanel({
+  className = '',
   markers = [],
   assets = [],
   interactions = [],
@@ -14,12 +15,14 @@ export default function ElementsPanel({
   onAddMarker,
   onDeleteMarker,
   onUpdateMarker,
+  onDeleteAsset,
   onOpenUploadModal,
   onOpenRulesModal
 }) {
   const fileInputRefs = useRef({});
   const [cardPreviews, setCardPreviews] = useState({});
   const [uploadingMarkerId, setUploadingMarkerId] = useState(null);
+  const [assetToDelete, setAssetToDelete] = useState(null);
 
   const handleTriggerFileInput = (markerId) => {
     if (fileInputRefs.current[markerId]) {
@@ -74,7 +77,7 @@ export default function ElementsPanel({
   };
 
   return (
-    <aside className="editor-panel-left">
+    <aside className={`editor-panel-left ${className}`.trim()}>
       {/* Header del Panel */}
       <div className="panel-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -84,7 +87,7 @@ export default function ElementsPanel({
         <button
           type="button"
           className="btn btn-secondary"
-          style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', minHeight: '30px' }}
+          style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', minHeight: '36px' }}
           onClick={onAddMarker}
           title="Agregar otra tarjeta física a la experiencia"
         >
@@ -264,36 +267,95 @@ export default function ElementsPanel({
                     </button>
                   </div>
 
-                  {markerAssets.map((asset) => {
-                    const isAssetSelected = asset.id === selectedAssetId;
-                    let AssetIcon = Box;
-                    let typeLabel = 'Modelo 3D';
-                    if (asset.type === 'image') { AssetIcon = Image; typeLabel = 'Imagen'; }
-                    if (asset.type === 'audio') { AssetIcon = Volume2; typeLabel = 'Audio'; }
-                    if (asset.type === 'video') { AssetIcon = Video; typeLabel = 'Video'; }
-                    if (asset.type === 'text') { AssetIcon = Type; typeLabel = 'Texto'; }
+                  {markerAssets.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '0.65rem 0.5rem',
+                        textAlign: 'center',
+                        color: 'var(--text-muted)',
+                        fontSize: '0.75rem',
+                        fontStyle: 'italic',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        borderRadius: '6px',
+                        border: '1px dashed rgba(255, 255, 255, 0.08)',
+                        margin: '0.2rem 0'
+                      }}
+                    >
+                      Aún no has agregado contenido
+                    </div>
+                  ) : (
+                    markerAssets.map((asset) => {
+                      const isAssetSelected = asset.id === selectedAssetId;
+                      let AssetIcon = Box;
+                      let typeLabel = 'Modelo 3D';
+                      if (asset.type === 'image') { AssetIcon = Image; typeLabel = 'Imagen'; }
+                      if (asset.type === 'audio') { AssetIcon = Volume2; typeLabel = 'Audio'; }
+                      if (asset.type === 'video') { AssetIcon = Video; typeLabel = 'Video'; }
+                      if (asset.type === 'text') { AssetIcon = Type; typeLabel = 'Texto'; }
 
-                    const displayName = asset.configuration?.title ||
-                                        (asset.file_url ? asset.file_url.split('/').pop() : typeLabel);
+                      const displayName = asset.configuration?.title ||
+                                          (asset.file_url ? asset.file_url.split('/').pop() : typeLabel);
 
-                    return (
-                      <div
-                        key={asset.id}
-                        className={`asset-sub-item ${isAssetSelected ? 'selected' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectAsset(asset.id, marker.id);
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', overflow: 'hidden' }}>
-                          <AssetIcon size={14} color={isAssetSelected ? 'var(--accent-cyan)' : 'var(--text-secondary)'} style={{ flexShrink: 0 }} />
-                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            <strong>{typeLabel}:</strong> {displayName}
-                          </span>
+                      return (
+                        <div
+                          key={asset.id}
+                          className={`asset-sub-item ${isAssetSelected ? 'selected' : ''}`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '0.45rem',
+                            padding: '0.45rem 0.6rem'
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectAsset(asset.id, marker.id);
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', overflow: 'hidden', flex: 1 }}>
+                            <AssetIcon size={14} color={isAssetSelected ? 'var(--accent-cyan)' : 'var(--text-secondary)'} style={{ flexShrink: 0 }} />
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.78rem' }}>
+                              <strong>{typeLabel}:</strong> {displayName}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            className="asset-delete-btn"
+                            title={`Eliminar ${typeLabel}: ${displayName}`}
+                            aria-label={`Eliminar contenido ${displayName}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAssetToDelete(asset);
+                            }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: '3px 5px',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              transition: 'color var(--transition-fast), background var(--transition-fast)'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = '#f43f5e';
+                              e.currentTarget.style.background = 'rgba(244, 63, 94, 0.15)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = 'var(--text-muted)';
+                              e.currentTarget.style.background = 'transparent';
+                            }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
 
                   {/* Botón para agregar contenido digital */}
                   <button
@@ -380,6 +442,141 @@ export default function ElementsPanel({
           </button>
         </div>
       </div>
+
+      {/* Modal de Confirmación para Eliminar Contenido Digital */}
+      {assetToDelete && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(5, 11, 20, 0.85)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem'
+          }}
+          onClick={() => setAssetToDelete(null)}
+        >
+          <div
+            className="modal-card"
+            style={{
+              background: '#0d121d',
+              border: '1px solid rgba(244, 63, 94, 0.4)',
+              borderRadius: '20px',
+              padding: '1.75rem',
+              maxWidth: '420px',
+              width: '100%',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(244, 63, 94, 0.18)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.25rem',
+              textAlign: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-asset-title"
+          >
+            {/* Ícono de advertencia */}
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div
+                style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '50%',
+                  background: 'rgba(244, 63, 94, 0.15)',
+                  border: '1px solid rgba(244, 63, 94, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#f43f5e'
+                }}
+              >
+                <Trash2 size={26} />
+              </div>
+            </div>
+
+            {/* Título y texto explicativo */}
+            <div>
+              <h3 id="delete-asset-title" style={{ margin: '0 0 0.4rem 0', color: '#ffffff', fontSize: '1.25rem', fontWeight: 800 }}>
+                ¿Eliminar este contenido?
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Este contenido se eliminará del proyecto.
+              </p>
+            </div>
+
+            {/* Caja informativa con el nombre del contenido */}
+            <div
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '12px',
+                padding: '0.85rem 1rem',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.25rem'
+              }}
+            >
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Nombre:
+              </span>
+              <span
+                style={{
+                  fontSize: '0.92rem',
+                  fontWeight: 700,
+                  color: 'var(--accent-cyan)',
+                  wordBreak: 'break-all',
+                  fontFamily: 'monospace'
+                }}
+              >
+                {assetToDelete.configuration?.title ||
+                 (assetToDelete.file_url ? assetToDelete.file_url.split('/').pop() : assetToDelete.type || 'Contenido')}
+              </span>
+            </div>
+
+            {/* Botones de acción */}
+            <div style={{ display: 'flex', gap: '0.75rem', width: '100%', marginTop: '0.25rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ flex: 1, padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600 }}
+                onClick={() => setAssetToDelete(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                  backgroundColor: '#e11d48',
+                  borderColor: '#e11d48',
+                  color: '#ffffff',
+                  boxShadow: '0 4px 14px rgba(225, 29, 72, 0.4)',
+                  cursor: 'pointer'
+                }}
+                onClick={() => {
+                  if (onDeleteAsset) {
+                    onDeleteAsset(assetToDelete.id);
+                  }
+                  setAssetToDelete(null);
+                }}
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
