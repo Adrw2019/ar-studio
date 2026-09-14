@@ -8,6 +8,7 @@ export default function StudioNavbar({
   saveStatus,
   onManualSave,
   onOpenPublish,
+  onOpenTheme,
   projectSlug
 }) {
   const navigate = useNavigate();
@@ -54,6 +55,17 @@ export default function StudioNavbar({
       </div>
 
       <div className="studio-nav-actions">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ padding: '0.45rem 0.85rem', fontSize: '0.85rem', minHeight: '38px' }}
+          onClick={onOpenTheme}
+          title="Personalizar apariencia, colores y textos del proyecto"
+        >
+          <Sparkles size={16} color="var(--accent-amber)" />
+          <span className="hide-mobile-sm">Tema</span>
+        </button>
+
         <button
           type="button"
           className="btn btn-secondary"

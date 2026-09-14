@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, AlertTriangle, HelpCircle, Layers, FolderOpen } from 'lucide-react';
+import {
+  ArrowLeft, RefreshCw, AlertTriangle, HelpCircle, Layers, FolderOpen,
+  Play, Sparkles, Printer, CheckCircle2, ShieldCheck, BookOpen
+} from 'lucide-react';
 import ARViewer from '../components/ARViewer';
 import MarkerStatus from '../components/MarkerStatus';
 import ARControls from '../components/ARControls';
@@ -9,13 +12,14 @@ import InfoModal from '../components/InfoModal';
 import TargetPreviewModal from '../components/TargetPreviewModal';
 import { demoMarkers, interactionRules } from '../ar/config';
 import { apiService } from '../services/api';
+import { resolveAssetPath } from '../utils/paths';
 
 export default function ARExperience() {
   const { slug: rawSlug } = useParams();
   const slug = rawSlug || (typeof window !== 'undefined' && window.location.pathname.includes('/demo') ? 'demo' : null);
   const navigate = useNavigate();
 
-  // Activar estilos exclusivos en body durante el montaje de la experiencia AR
+  // Activar clase para pantalla completa AR
   useEffect(() => {
     document.body.classList.add('ar-active');
     return () => {
@@ -23,10 +27,13 @@ export default function ARExperience() {
     };
   }, []);
 
-  // Estados del Proyecto: 'loading', 'ready', 'empty', 'not_found', 'error'
-  const [loadState, setLoadState] = useState('loading');
+  // Estados del Proyecto
+  const [loadState, setLoadState] = useState('loading'); // 'loading', 'ready', 'empty', 'not_found', 'error'
   const [projectData, setProjectData] = useState(null);
   const [projectError, setProjectError] = useState(null);
+
+  // Flujo del Estudiante: 'hasStarted' controla si se muestra la pantalla de bienvenida o la cámara AR
+  const [hasStarted, setHasStarted] = useState(false);
 
   // Estados de la experiencia AR
   const [isLoading, setIsLoading] = useState(true);
@@ -47,22 +54,28 @@ export default function ARExperience() {
   const [resetTrigger, setResetTrigger] = useState(0);
 
   const loadProject = useCallback(async () => {
-    // 1. Si no hay slug, no cargar marcadores ni motor
     if (!slug) {
       setProjectData(null);
       setLoadState('empty');
       return;
     }
 
-    // 2. Ruta explícita de demo de desarrollo
     if (slug === 'demo') {
       const demoProject = {
         id: 'demo',
         name: 'Demo: Motor y Energía',
+        category: 'Electrónica',
         slug: 'demo',
         status: 'demo',
         mind_file_url: 'markers/targets.mind',
         max_track_targets: 2,
+        theme: {
+          primaryColor: '#00f2fe',
+          secondaryColor: '#8a2be2',
+          title: 'Laboratorio de Electrónica y Motor',
+          subtitle: 'Simulación de inducción electromagnética',
+          introText: 'Bienvenido al laboratorio interactivo. Enfoca las tarjetas físicas de Motor y Energía para iniciar la simulación.'
+        },
         markers: demoMarkers,
         assets: demoMarkers.map((m) => ({
           id: `asset-${m.id}`,
@@ -86,7 +99,6 @@ export default function ARExperience() {
       return;
     }
 
-    // 3. Cargar proyecto real desde la API
     setLoadState('loading');
     setProjectError(null);
     try {
@@ -158,7 +170,6 @@ export default function ARExperience() {
     if (isInfoModalOpen) {
       setIsInfoModalOpen(false);
     } else {
-      // El panel NO debe mostrarse automáticamente si no existe un objeto seleccionado o detectado
       if (!statusState.activeMarkerName && !selectedMarkerInfo) {
         return;
       }
@@ -178,10 +189,10 @@ export default function ARExperience() {
 
   // 1. Estado de carga de configuración
   if (loadState === 'loading') {
-    return <LoadingScreen message="Cargando configuración del proyecto AR..." />;
+    return <LoadingScreen message="Cargando experiencia de Realidad Aumentada..." />;
   }
 
-  // 2. Estado vacío: No hay proyecto cargado
+  // 2. Estado vacío: No hay slug o proyecto
   if (loadState === 'empty') {
     return (
       <div className="ar-empty-overlay">
@@ -265,7 +276,264 @@ export default function ARExperience() {
     );
   }
 
-  // 5. Estado listo: Proyecto válido cargado
+  // Configuración de apariencia visual del proyecto
+  const theme = projectData?.theme || {};
+  const primaryColor = theme.primaryColor || '#00f2fe';
+  const secondaryColor = theme.secondaryColor || '#8a2be2';
+  const projectTitle = theme.title || projectData?.name || 'Experiencia AR';
+  const projectSubtitle = theme.subtitle || projectData?.category || 'Realidad Aumentada';
+  const projectIntro = theme.introText || projectData?.description || 'Enfoca las tarjetas físicas con la cámara para interactuar con los elementos 3D.';
+  const markersList = projectData?.markers || [];
+
+  // =========================================================================
+  // PASO 1 DEL FLUJO DEL ESTUDIANTE: PANTALLA DE BIENVENIDA PERSONALIZADA
+  // =========================================================================
+  if (!hasStarted) {
+    return (
+      <div
+        className="ar-player-page"
+        style={{
+          minHeight: '100vh',
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.5rem',
+          background: theme.backgroundImage
+            ? `linear-gradient(rgba(8, 11, 17, 0.85), rgba(8, 11, 17, 0.95)), url(${theme.backgroundImage}) center/cover no-repeat`
+            : `radial-gradient(circle at 50% 20%, ${secondaryColor}25, #080b11 80%)`,
+          position: 'relative',
+          overflowY: 'auto'
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '480px',
+            width: '100%',
+            background: 'rgba(13, 18, 29, 0.92)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: `1px solid ${primaryColor}44`,
+            borderRadius: '24px',
+            padding: '2rem 1.75rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+            boxShadow: `0 16px 40px rgba(0, 0, 0, 0.7), 0 0 30px ${primaryColor}15`,
+            textAlign: 'center'
+          }}
+        >
+          {/* Badge de Categoría */}
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: `1px solid ${primaryColor}66`,
+                color: primaryColor,
+                padding: '0.3rem 0.85rem',
+                borderRadius: '999px',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}
+            >
+              <Sparkles size={13} color={primaryColor} />
+              {projectData?.category || 'Experiencia AR'}
+            </span>
+          </div>
+
+          {/* Título y Subtítulo */}
+          <div>
+            <h1
+              style={{
+                fontSize: '1.65rem',
+                fontWeight: 800,
+                color: '#ffffff',
+                lineHeight: 1.25,
+                margin: '0 0 0.4rem 0'
+              }}
+            >
+              {projectTitle}
+            </h1>
+            <p style={{ margin: 0, fontSize: '0.92rem', color: primaryColor, fontWeight: 600 }}>
+              {projectSubtitle}
+            </p>
+          </div>
+
+          {/* Texto de Introducción */}
+          <p
+            style={{
+              fontSize: '0.88rem',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.5,
+              margin: 0,
+              padding: '0.75rem 1rem',
+              background: 'rgba(255, 255, 255, 0.03)',
+              borderRadius: '14px',
+              border: '1px solid var(--border-subtle)',
+              textAlign: 'left'
+            }}
+          >
+            {projectIntro}
+          </p>
+
+          {/* Resumen de Tarjetas Físicas */}
+          {markersList.length > 0 && (
+            <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Tarjetas para esta experiencia ({markersList.length}):
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsTargetModalOpen(true)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: primaryColor,
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    padding: 0
+                  }}
+                >
+                  <Printer size={13} />
+                  <span>Ver / Imprimir</span>
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+                {markersList.map((m, idx) => (
+                  <span
+                    key={m.id || idx}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '8px',
+                      padding: '0.3rem 0.6rem',
+                      fontSize: '0.78rem',
+                      color: 'var(--text-primary)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: primaryColor }} />
+                    {m.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Aviso si no cuenta con targets.mind compilado */}
+          {(!projectData?.mind_file_url || projectData?.tracking_status === 'pending') && (
+            <div
+              style={{
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                borderRadius: '12px',
+                padding: '0.65rem 0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                color: '#f59e0b',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                textAlign: 'left'
+              }}
+            >
+              <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+              <div>
+                <strong>Tarjetas pendientes de preparar:</strong> Este proyecto aún no cuenta con un archivo <code>targets.mind</code> compilado.
+              </div>
+            </div>
+          )}
+
+          {/* Botón Principal de Inicio de Experiencia */}
+          {!projectData?.mind_file_url || projectData?.tracking_status === 'pending' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{
+                  padding: '0.85rem 1.5rem',
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  borderRadius: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  color: 'var(--text-muted)',
+                  cursor: 'not-allowed',
+                  opacity: 0.7
+                }}
+                disabled
+              >
+                <span>Tarjetas pendientes de preparar</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: '0.82rem', padding: '0.5rem' }}
+                onClick={() => navigate(projectData?.id ? `/studio/project/${projectData.id}` : '/projects')}
+              >
+                <span>Abrir en AR Studio para preparar tarjetas</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{
+                padding: '0.85rem 1.5rem',
+                fontSize: '1rem',
+                fontWeight: 800,
+                backgroundColor: primaryColor,
+                borderColor: primaryColor,
+                color: '#050b14',
+                borderRadius: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.6rem',
+                cursor: 'pointer',
+                boxShadow: `0 8px 24px ${primaryColor}40`,
+                transition: 'transform var(--transition-fast), box-shadow var(--transition-fast)'
+              }}
+              onClick={() => setHasStarted(true)}
+            >
+              <Play size={20} fill="#050b14" />
+              <span>Iniciar experiencia</span>
+            </button>
+          )}
+
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            Se solicitará acceso a la cámara trasera para enfocar las tarjetas físicas.
+          </span>
+        </div>
+
+        {/* Modal para ver e imprimir las tarjetas del proyecto */}
+        <TargetPreviewModal
+          isOpen={isTargetModalOpen}
+          onClose={() => setIsTargetModalOpen(false)}
+          markers={markersList}
+        />
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // PASO 2 DEL FLUJO DEL ESTUDIANTE: CÁMARA ACTIVA + CONTENIDO AR INTERACTIVO
+  // =========================================================================
   return (
     <div className="ar-player-page ar-viewport-container">
       {/* 1. Visor AR (WebGL Canvas + MindAR Video Stream) */}
@@ -284,7 +552,7 @@ export default function ARExperience() {
         />
       )}
 
-      {/* 2. Pantalla de Carga Inicial */}
+      {/* 2. Pantalla de Carga Inicial del Motor */}
       {isLoading && !errorMessage && (
         <LoadingScreen message="Inicializando cámara trasera y motor de seguimiento..." />
       )}
@@ -312,9 +580,9 @@ export default function ARExperience() {
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => navigate('/projects')}
+                onClick={() => setHasStarted(false)}
               >
-                <span>Volver a proyectos</span>
+                <span>Volver a la portada</span>
               </button>
             </div>
           </div>
@@ -324,12 +592,12 @@ export default function ARExperience() {
       {/* 4. Retícula de Escaneo / Búsqueda */}
       {!isLoading && !errorMessage && (
         <div className={`ar-scan-reticle ${statusState.status === 'detected' || statusState.status === 'interaction' ? 'detected' : ''}`}>
-          <div className="reticle-corner tl" />
-          <div className="reticle-corner tr" />
-          <div className="reticle-corner bl" />
-          <div className="reticle-corner br" />
-          <div className="reticle-hint">
-            Apunta hacia la tarjeta {projectData?.name ? `de ${projectData.name}` : 'física'}
+          <div className="reticle-corner tl" style={{ borderColor: primaryColor }} />
+          <div className="reticle-corner tr" style={{ borderColor: primaryColor }} />
+          <div className="reticle-corner bl" style={{ borderColor: primaryColor }} />
+          <div className="reticle-corner br" style={{ borderColor: primaryColor }} />
+          <div className="reticle-hint" style={{ background: 'rgba(13, 18, 29, 0.85)', border: `1px solid ${primaryColor}44` }}>
+            Apunta hacia una tarjeta de <strong>{projectTitle}</strong>
           </div>
         </div>
       )}
@@ -342,17 +610,17 @@ export default function ARExperience() {
             <button
               type="button"
               className="ar-round-btn"
-              onClick={() => navigate('/projects')}
-              aria-label="Volver al menú de proyectos"
-              title="Volver a proyectos"
+              onClick={() => setHasStarted(false)}
+              aria-label="Volver a la portada del proyecto"
+              title="Volver a la presentación del proyecto"
             >
               <ArrowLeft size={20} />
             </button>
 
-            <div className="ar-brand-pill">
-              <div className="ar-badge-live" />
+            <div className="ar-brand-pill" style={{ borderColor: `${primaryColor}66` }}>
+              <div className="ar-badge-live" style={{ backgroundColor: primaryColor, boxShadow: `0 0 8px ${primaryColor}` }} />
               <span className="ar-brand-text">
-                {projectData?.name ? projectData.name.slice(0, 20) : 'AR Studio'}
+                {projectTitle.length > 22 ? `${projectTitle.slice(0, 22)}...` : projectTitle}
               </span>
             </div>
 
@@ -369,21 +637,18 @@ export default function ARExperience() {
 
           {/* Área Inferior: Estado del Marcador + Controles Táctiles */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', width: '100%' }}>
-            {/* Badge de Estado Dinámico */}
             <MarkerStatus
               status={statusState.status}
               activeMarkerName={statusState.activeMarkerName}
               interactionMessage={interactionState.message}
             />
 
-            {/* Hint de toque si el modelo está visible */}
             {statusState.status === 'detected' && (
-              <div className="ar-touch-hint">
-                <span>👆 Toca el modelo 3D en pantalla para interactuar</span>
+              <div className="ar-touch-hint" style={{ border: `1px solid ${primaryColor}55` }}>
+                <span>👆 Toca el elemento en pantalla para interactuar</span>
               </div>
             )}
 
-            {/* Controles Flotantes Inferiores */}
             <ARControls
               onToggleInfo={handleToggleInfo}
               onReset={handleReset}
@@ -396,7 +661,7 @@ export default function ARExperience() {
         </div>
       )}
 
-      {/* 6. Modal Didáctico del Modelo Tocado */}
+      {/* 6. Modal Didáctico del Elemento Tocado */}
       {isInfoModalOpen && selectedMarkerInfo && (
         <InfoModal
           markerInfo={selectedMarkerInfo}
@@ -408,7 +673,7 @@ export default function ARExperience() {
       <TargetPreviewModal
         isOpen={isTargetModalOpen}
         onClose={() => setIsTargetModalOpen(false)}
-        markers={projectData?.markers}
+        markers={markersList}
       />
     </div>
   );

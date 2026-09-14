@@ -83,12 +83,21 @@ export default function ARViewer({
       message: r.action_config?.message || r.message || 'Tarjetas detectadas e interactuando.'
     }));
 
+    // Si el proyecto no tiene archivo .mind compilado, no inventar ni intentar cargar archivo inexistente
+    if (!mindFileUrl) {
+      console.warn('[ARViewer] mindFileUrl es null: Tarjetas pendientes de preparar.');
+      if (onError) {
+        onError('Tarjetas pendientes de preparar: Este proyecto aún no cuenta con un archivo targets.mind compilado para reconocimiento visual.');
+      }
+      return;
+    }
+
     async function initAR() {
       try {
-        // 1. Instanciar MindAR Manager
+        // 1. Instanciar MindAR Manager con el archivo .mind real del proyecto
         const mindarManager = new MindARManager({
           container,
-          imageTargetSrc: mindFileUrl || 'markers/targets.mind',
+          imageTargetSrc: mindFileUrl,
           maxTrack: Math.max(2, resolvedMarkers.length),
           uiLoading: 'no',
           uiScanning: 'no',

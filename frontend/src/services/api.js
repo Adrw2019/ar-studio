@@ -179,5 +179,22 @@ export const apiService = {
       console.error('Error al subir archivo:', err.message);
       throw err;
     }
+  },
+
+  /**
+   * Compilar targets.mind para un proyecto específico
+   */
+  async compileProjectTargets(id) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/projects/${id}/compile-targets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await parseResponse(res);
+      return data;
+    } catch (err) {
+      console.error(`Error al compilar targets para proyecto ${id}:`, err.message);
+      throw err;
+    }
   }
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Layers, Sliders, Eye, Box, Zap, Sparkles } from 'lucide-react';
+import { Layers, Sliders, Eye, Box, Zap, Sparkles, AlertTriangle, CheckCircle2, RefreshCw, Info } from 'lucide-react';
 import StudioNavbar from '../components/StudioNavbar';
 import Viewport3D from '../components/Viewport3D';
 import ElementsPanel from '../components/ElementsPanel';
@@ -8,6 +8,7 @@ import InspectorPanel from '../components/InspectorPanel';
 import RulesEditorModal from '../components/RulesEditorModal';
 import PublishModal from '../components/PublishModal';
 import UploadAssetModal from '../components/UploadAssetModal';
+import ThemeModal from '../components/ThemeModal';
 import { apiService } from '../../services/api';
 import '../styles/editor.css';
 
@@ -30,6 +31,7 @@ export default function StudioEditor() {
   // Modales
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const [uploadModalTargetMarkerId, setUploadModalTargetMarkerId] = useState(null);
 
   // Referencia para debounce de auto-guardado
@@ -106,20 +108,63 @@ export default function StudioEditor() {
     setMobileActiveTab('inspector'); // En móvil abrir inspector directamente
   };
 
+  // Estado de compilación de targets
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [showErrorDetailModal, setShowErrorDetailModal] = useState(false);
+
+  // Compilar targets físicos con MindAR
+  const handleCompileTargets = async () => {
+    if (!project || !project.id) return;
+    setIsCompiling(true);
+    const compilingState = { ...project, tracking_status: 'compiling', tracking_error: null };
+    setProject(compilingState);
+
+    try {
+      // 1. Guardar primero el proyecto actual
+      await apiService.updateProject(project.id, compilingState);
+
+      // 2. Ejecutar compilación de MindAR
+      const res = await apiService.compileProjectTargets(project.id);
+      if (res && res.success) {
+        setProject(prev => ({
+          ...prev,
+          mind_file_url: res.mind_file_url,
+          tracking_status: 'ready',
+          tracking_error: null,
+          markers: res.markers || prev.markers
+        }));
+      } else {
+        throw new Error(res?.error || res?.tracking_error || 'Error al compilar targets.');
+      }
+    } catch (err) {
+      console.error('[StudioEditor] Error al compilar tarjetas:', err);
+      setProject(prev => ({
+        ...prev,
+        tracking_status: 'error',
+        tracking_error: err.message || 'Error al compilar las tarjetas físicas.'
+      }));
+    } finally {
+      setIsCompiling(false);
+    }
+  };
+
   const handleAddMarker = () => {
     if (!project) return;
-    const markerIndex = (project.markers || []).length;
+    const existingIndices = (project.markers || []).map(m => typeof m.target_index === 'number' ? m.target_index : 0);
+    const nextIndex = existingIndices.length > 0 ? Math.max(...existingIndices) + 1 : 0;
+    const markerCount = (project.markers || []).length;
+
     const newMarker = {
-      id: `marker-${Date.now()}-${markerIndex}`,
+      id: `marker-${Date.now()}-${nextIndex}`,
       project_id: project.id,
-      name: `Tarjeta ${markerIndex + 1}`,
-      target_image: '/markers/card-motor.svg',
-      target_index: markerIndex,
-      description: `Tarjeta marcadora #${markerIndex + 1}`
+      name: `Tarjeta ${markerCount + 1}`,
+      target_image: '',
+      target_index: nextIndex,
+      description: `Tarjeta física #${markerCount + 1}`
     };
 
     const newAsset = {
-      id: `asset-${Date.now()}-${markerIndex}`,
+      id: `asset-${Date.now()}-${nextIndex}`,
       project_id: project.id,
       marker_id: newMarker.id,
       type: 'model3d',
@@ -134,15 +179,18 @@ export default function StudioEditor() {
       scale_y: 0.75,
       scale_z: 0.75,
       configuration: {
-        title: `Elemento ${markerIndex + 1}`,
+        title: `Elemento ${markerCount + 1}`,
         category: 'Educación',
         description: 'Objeto didáctico 3D.',
         interactive: true
       }
     };
 
+    // Agregar tarjeta requiere recompilar targets.mind
     const updated = {
       ...project,
+      tracking_status: 'pending',
+      mind_file_url: null,
       markers: [...(project.markers || []), newMarker],
       assets: [...(project.assets || []), newAsset]
     };
@@ -157,8 +205,11 @@ export default function StudioEditor() {
     const remainingMarkers = (project.markers || []).filter(m => m.id !== markerId);
     const remainingAssets = (project.assets || []).filter(a => a.marker_id !== markerId);
 
+    // Eliminar tarjeta requiere recompilar targets.mind
     const updated = {
       ...project,
+      tracking_status: 'pending',
+      mind_file_url: null,
       markers: remainingMarkers,
       assets: remainingAssets
     };
@@ -177,8 +228,18 @@ export default function StudioEditor() {
 
   const handleUpdateMarker = (markerId, updatedMarker) => {
     if (!project) return;
+    const originalMarker = (project.markers || []).find(m => m.id === markerId);
+    const imageChanged = originalMarker && originalMarker.target_image !== updatedMarker.target_image;
+
     const updatedMarkers = (project.markers || []).map(m => m.id === markerId ? updatedMarker : m);
-    triggerAutoSave({ ...project, markers: updatedMarkers });
+
+    const updatedProject = {
+      ...project,
+      ...(imageChanged ? { tracking_status: 'pending', mind_file_url: null } : {}),
+      markers: updatedMarkers
+    };
+
+    triggerAutoSave(updatedProject);
   };
 
   const handleUpdateAsset = (assetId, updatedAsset) => {
@@ -233,6 +294,7 @@ export default function StudioEditor() {
         saveStatus={saveStatus}
         onManualSave={() => saveToBackend(project)}
         onOpenPublish={() => setIsPublishModalOpen(true)}
+        onOpenTheme={() => setIsThemeModalOpen(true)}
         projectSlug={project.slug}
       />
 
@@ -253,9 +315,129 @@ export default function StudioEditor() {
           <span>Interacción</span>
         </div>
         <span className="stepper-arrow">→</span>
-        <div className="stepper-item">
+        <div className="stepper-item" onClick={() => setIsThemeModalOpen(true)} style={{ cursor: 'pointer' }}>
           <span className="stepper-num">4</span>
-          <span>Publicar</span>
+          <span>Apariencia</span>
+        </div>
+        <span className="stepper-arrow">→</span>
+        <div className="stepper-item" onClick={() => setIsPublishModalOpen(true)} style={{ cursor: 'pointer' }}>
+          <span className="stepper-num">5</span>
+          <span>Publicar / QR</span>
+        </div>
+      </div>
+
+      {/* 2.5 Barra de Estado de Preparación de Tarjetas MindAR */}
+      <div
+        className="target-compilation-bar"
+        style={{
+          margin: '0.4rem 1.25rem 0.6rem 1.25rem',
+          padding: '0.65rem 1.25rem',
+          borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          background: project.tracking_status === 'ready'
+            ? 'rgba(16, 185, 129, 0.08)'
+            : (project.tracking_status === 'compiling' || isCompiling)
+            ? 'rgba(0, 242, 254, 0.08)'
+            : project.tracking_status === 'error'
+            ? 'rgba(244, 63, 94, 0.1)'
+            : 'rgba(245, 158, 11, 0.08)',
+          border: `1px solid ${
+            project.tracking_status === 'ready'
+              ? 'rgba(16, 185, 129, 0.35)'
+              : (project.tracking_status === 'compiling' || isCompiling)
+              ? 'rgba(0, 242, 254, 0.35)'
+              : project.tracking_status === 'error'
+              ? 'rgba(244, 63, 94, 0.35)'
+              : 'rgba(245, 158, 11, 0.35)'
+          }`
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          {project.tracking_status === 'ready' ? (
+            <CheckCircle2 size={20} color="#10b981" />
+          ) : (project.tracking_status === 'compiling' || isCompiling) ? (
+            <RefreshCw size={20} color="var(--accent-cyan)" className="animate-spin-slow" />
+          ) : project.tracking_status === 'error' ? (
+            <AlertTriangle size={20} color="#f43f5e" />
+          ) : (
+            <AlertTriangle size={20} color="#f59e0b" />
+          )}
+
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#ffffff' }}>
+              {project.tracking_status === 'ready'
+                ? 'Tarjetas listas para AR'
+                : (project.tracking_status === 'compiling' || isCompiling)
+                ? 'Preparando reconocimiento de imágenes...'
+                : project.tracking_status === 'error'
+                ? 'No se pudieron preparar las tarjetas'
+                : 'Las tarjetas aún no están preparadas'}
+            </div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+              {project.tracking_status === 'ready'
+                ? `Archivo de seguimiento visual compilado y listo para la cámara.`
+                : (project.tracking_status === 'compiling' || isCompiling)
+                ? 'Extrayendo características visuales con MindAR (esto puede tardar unos segundos)...'
+                : project.tracking_status === 'error'
+                ? (project.tracking_error || 'Error al procesar las imágenes de las tarjetas.')
+                : 'Debes compilar las imágenes para que la cámara del estudiante las reconozca.'}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {project.tracking_status === 'error' && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.76rem', padding: '0.35rem 0.65rem', minHeight: '32px' }}
+              onClick={() => setShowErrorDetailModal(true)}
+            >
+              <span>Ver detalle</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{
+              fontSize: '0.8rem',
+              padding: '0.45rem 0.95rem',
+              fontWeight: 700,
+              minHeight: '34px',
+              backgroundColor: project.tracking_status === 'ready' ? 'transparent' : 'var(--accent-cyan)',
+              color: project.tracking_status === 'ready' ? '#10b981' : '#050b14',
+              borderColor: project.tracking_status === 'ready' ? 'rgba(16, 185, 129, 0.4)' : 'var(--accent-cyan)'
+            }}
+            disabled={isCompiling || project.tracking_status === 'compiling'}
+            onClick={handleCompileTargets}
+          >
+            {isCompiling || project.tracking_status === 'compiling' ? (
+              <>
+                <RefreshCw size={14} className="animate-spin-slow" />
+                <span>Preparando...</span>
+              </>
+            ) : project.tracking_status === 'ready' ? (
+              <>
+                <RefreshCw size={14} />
+                <span>Recompilar tarjetas</span>
+              </>
+            ) : project.tracking_status === 'error' ? (
+              <>
+                <RefreshCw size={14} />
+                <span>Reintentar</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} fill="#050b14" />
+                <span>Preparar tarjetas para AR</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -327,7 +509,7 @@ export default function StudioEditor() {
         </button>
       </nav>
 
-      {/* 4. Modales */}
+      {/* 5. Modales */}
       {isRulesModalOpen && (
         <RulesEditorModal
           isOpen={true}
@@ -348,6 +530,16 @@ export default function StudioEditor() {
         />
       )}
 
+      {isThemeModalOpen && (
+        <ThemeModal
+          isOpen={true}
+          onClose={() => setIsThemeModalOpen(false)}
+          theme={project.theme || {}}
+          projectName={project.name}
+          onSaveTheme={(newTheme) => triggerAutoSave({ ...project, theme: newTheme })}
+        />
+      )}
+
       {uploadModalTargetMarkerId && (
         <UploadAssetModal
           isOpen={true}
@@ -355,6 +547,56 @@ export default function StudioEditor() {
           targetMarkerId={uploadModalTargetMarkerId}
           onAssetUploaded={handleAssetUploaded}
         />
+      )}
+
+      {/* Modal de Detalle de Error en Compilación */}
+      {showErrorDetailModal && (
+        <div className="modal-backdrop" onClick={() => setShowErrorDetailModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '460px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
+              <AlertTriangle size={24} color="#f43f5e" />
+              <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Detalle del Error de Compilación</h2>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 1rem 0' }}>
+              No se pudo generar el archivo targets.mind para el reconocimiento visual de las tarjetas:
+            </p>
+            <div
+              style={{
+                padding: '0.85rem',
+                background: 'rgba(244, 63, 94, 0.1)',
+                border: '1px solid rgba(244, 63, 94, 0.3)',
+                borderRadius: '8px',
+                fontFamily: 'monospace',
+                fontSize: '0.8rem',
+                color: '#f43f5e',
+                wordBreak: 'break-word',
+                marginBottom: '1.25rem'
+              }}
+            >
+              {project.tracking_error || 'Error desconocido al compilar las imágenes.'}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowErrorDetailModal(false)}
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setShowErrorDetailModal(false);
+                  handleCompileTargets();
+                }}
+              >
+                <RefreshCw size={14} />
+                <span>Reintentar preparación</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

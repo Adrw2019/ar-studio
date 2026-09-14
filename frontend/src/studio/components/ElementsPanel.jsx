@@ -128,11 +128,14 @@ export default function ElementsPanel({
 
                 {/* 2. Sección: TARJETA FÍSICA (Imagen que reconoce la cámara) */}
                 <div className="card-target-box" onClick={(e) => e.stopPropagation()}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                       <CreditCard size={13} color="var(--accent-cyan)" />
                       <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                         Imagen de la tarjeta
+                      </span>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                        (Target #{marker.target_index ?? index})
                       </span>
                       <button
                         type="button"
@@ -141,10 +144,27 @@ export default function ElementsPanel({
                       >
                         ?
                         <span className="tooltip-box">
-                          Usa una imagen clara y con detalles. Esta imagen será reconocida por la cámara.
+                          Usa una imagen clara, contrastada y con detalles. Esta imagen será compilada y reconocida por la cámara.
                         </span>
                       </button>
                     </div>
+
+                    {marker.quality && (
+                      <span
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          padding: '0.15rem 0.45rem',
+                          borderRadius: '6px',
+                          backgroundColor: marker.quality === 'Buena' ? 'rgba(16, 185, 129, 0.15)' : marker.quality === 'Media' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(244, 63, 94, 0.15)',
+                          color: marker.quality === 'Buena' ? '#10b981' : marker.quality === 'Media' ? '#f59e0b' : '#f43f5e',
+                          border: `1px solid ${marker.quality === 'Buena' ? '#10b98144' : marker.quality === 'Media' ? '#f59e0b44' : '#f43f5e44'}`
+                        }}
+                        title={`Puntuación de seguimiento: ${marker.quality_score || 0}%`}
+                      >
+                        Calidad: {marker.quality}
+                      </span>
+                    )}
                   </div>
 
                   <div className="card-target-preview-row">

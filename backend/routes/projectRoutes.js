@@ -9,5 +9,6 @@ router.post('/', projectController.createProject);
 router.put('/:id', projectController.updateProject);
 router.delete('/:id', projectController.deleteProject);
 router.post('/:id/duplicate', projectController.duplicateProject);
+router.post('/:id/compile-targets', projectController.compileProjectTargets);
 
 module.exports = router;

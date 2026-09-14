@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { X, Globe, Copy, Check, Download, ExternalLink, Sparkles } from 'lucide-react';
+import { X, Globe, Copy, Check, Download, ExternalLink, Sparkles, AlertTriangle } from 'lucide-react';
 
 export default function PublishModal({
   isOpen,
@@ -15,6 +15,8 @@ export default function PublishModal({
   const [localSlug, setLocalSlug] = useState(project.slug || '');
   const [isPublished, setIsPublished] = useState(project.status === 'published');
   const qrRef = useRef(null);
+
+  const isTrackingReady = project.tracking_status === 'ready' && Boolean(project.mind_file_url);
 
   // Determinar URL pública completa
   const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
@@ -52,6 +54,10 @@ export default function PublishModal({
   };
 
   const handleTogglePublish = () => {
+    if (!isPublished && !isTrackingReady) {
+      alert('Debes preparar las tarjetas antes de publicar.');
+      return;
+    }
     const nextStatus = isPublished ? 'draft' : 'published';
     setIsPublished(!isPublished);
     onUpdateStatus(nextStatus);
@@ -80,6 +86,29 @@ export default function PublishModal({
           </button>
         </div>
 
+        {/* Advertencia si las tarjetas no están compiladas */}
+        {!isTrackingReady && (
+          <div
+            style={{
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              borderRadius: '12px',
+              padding: '0.75rem 1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+              color: '#f59e0b',
+              fontSize: '0.84rem',
+              fontWeight: 600
+            }}
+          >
+            <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+            <div>
+              Debes preparar las tarjetas antes de publicar.
+            </div>
+          </div>
+        )}
+
         {/* Estado del Proyecto */}
         <div
           style={{
@@ -104,8 +133,16 @@ export default function PublishModal({
           <button
             type="button"
             className={`btn ${isPublished ? 'btn-secondary' : 'btn-primary'}`}
-            style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', minHeight: '34px' }}
+            style={{
+              padding: '0.4rem 0.85rem',
+              fontSize: '0.8rem',
+              minHeight: '34px',
+              opacity: !isPublished && !isTrackingReady ? 0.6 : 1,
+              cursor: !isPublished && !isTrackingReady ? 'not-allowed' : 'pointer'
+            }}
+            disabled={!isPublished && !isTrackingReady}
             onClick={handleTogglePublish}
+            title={!isPublished && !isTrackingReady ? 'Debes preparar las tarjetas antes de publicar.' : ''}
           >
             {isPublished ? 'Despublicar' : 'Publicar Ahora'}
           </button>

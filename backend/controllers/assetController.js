@@ -13,20 +13,47 @@ exports.getAssetsByProject = async (req, res, next) => {
   }
 };
 
+const storageService = require('../services/storageService');
+const fs = require('fs');
+
 exports.uploadAsset = async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No se ha subido ningún archivo' });
     }
-    const fileUrl = `/uploads/${req.file.filename}`;
+
+    const buffer = fs.readFileSync(req.file.path);
+    const projectId = req.body.projectId || req.body.project_id;
+    const category = req.body.category || 'cards';
+
+    const saved = await storageService.saveFile({
+      filename: req.file.originalname,
+      buffer,
+      mimeType: req.file.mimetype,
+      projectId,
+      category
+    });
+
+    // Si se almacenó en Cloudinary, limpiar el archivo temporal de disco local
+    if (saved.provider === 'cloudinary') {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e) {}
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Archivo subido exitosamente',
-      file_url: fileUrl,
+      file_url: saved.secure_url || saved.url,
+      provider: saved.provider,
+      public_id: saved.public_id,
       original_name: req.file.originalname,
-      size: req.file.size
+      size: saved.bytes
     });
   } catch (error) {
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
     next(error);
   }
 };
