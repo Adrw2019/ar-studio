@@ -9,6 +9,13 @@
   <meta name="theme-color" content="#090d16" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="AR Studio" />
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+
+  <!-- Apple Touch Icon -->
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 
   <!-- SEO & Metadata -->
   <title>AR Studio - Experiencias de Realidad Aumentada Móvil</title>
@@ -21,17 +28,6 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet">
-
-  <script>
-    // Desregistrar Service Workers anteriores en localhost
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (registrations) {
-        for (var reg of registrations) {
-          reg.unregister();
-        }
-      });
-    }
-  </script>
 </head>
 
 <body>

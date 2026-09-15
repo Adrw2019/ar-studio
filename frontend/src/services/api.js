@@ -1,7 +1,9 @@
 /**
  * AR Studio - API Service Client
- * Métodos para interactuar con la API REST del backend
+ * Métodos para interactuar con la API REST del backend.
+ * Incluye fallback a IndexedDB para proyectos descargados offline.
  */
+import { offlineStorage } from './offlineStorage';
 
 const rawApiUrl = (import.meta.env.VITE_API_URL || '/api').trim().replace(/\/+$/, '');
 const API_BASE_URL = rawApiUrl;
@@ -58,7 +60,18 @@ export const apiService = {
       const data = await parseResponse(res);
       return data.data || [];
     } catch (err) {
-      console.warn('Error al obtener proyectos:', err.message);
+      console.warn('Error al obtener proyectos (intentando offline):', err.message);
+      // Fallback: listar proyectos descargados desde IndexedDB
+      try {
+        await offlineStorage.init();
+        const offlineProjects = await offlineStorage.listOfflineProjects();
+        if (offlineProjects && offlineProjects.length > 0) {
+          console.info('[API] Proyectos cargados desde almacenamiento offline:', offlineProjects.length);
+          return offlineProjects;
+        }
+      } catch (offErr) {
+        console.warn('[API] Fallback offline también falló:', offErr);
+      }
       return [];
     }
   },
@@ -72,7 +85,19 @@ export const apiService = {
       const data = await parseResponse(res);
       return data.data || null;
     } catch (err) {
-      console.warn(`Error al obtener proyecto ${id}:`, err.message);
+      console.warn(`Error al obtener proyecto ${id} (intentando offline):`, err.message);
+      // Fallback: buscar proyecto en IndexedDB
+      try {
+        await offlineStorage.init();
+        const offlineProject = await offlineStorage.getOfflineProject(String(id));
+        if (offlineProject) {
+          console.info(`[API] Proyecto ${id} cargado desde almacenamiento offline.`);
+          offlineProject._isOffline = true;
+          return offlineProject;
+        }
+      } catch (offErr) {
+        console.warn('[API] Fallback offline también falló:', offErr);
+      }
       return null;
     }
   },
@@ -92,7 +117,22 @@ export const apiService = {
       const data = await parseResponse(res);
       return data.data || null;
     } catch (err) {
-      console.warn(`Error al obtener proyecto ${slug}:`, err.message);
+      console.warn(`Error al obtener proyecto ${slug} (intentando offline):`, err.message);
+      // Fallback: buscar proyecto en IndexedDB por slug o por ID
+      try {
+        await offlineStorage.init();
+        let offlineProject = await offlineStorage.getOfflineProjectBySlug(slug);
+        if (!offlineProject) {
+          offlineProject = await offlineStorage.getOfflineProject(String(slug));
+        }
+        if (offlineProject) {
+          console.info(`[API] Proyecto "${slug}" cargado desde almacenamiento offline.`);
+          offlineProject._isOffline = true;
+          return offlineProject;
+        }
+      } catch (offErr) {
+        console.warn('[API] Fallback offline también falló:', offErr);
+      }
       return null;
     }
   },

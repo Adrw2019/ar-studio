@@ -214,6 +214,10 @@ export class SceneManager {
       const fileUrl = (asset.file_url || asset.url || '').trim();
       if (fileUrl) {
         const textureLoader = new THREE.TextureLoader();
+        // Configurar crossOrigin solo para URLs de red (no para blob:)
+        if (!fileUrl.startsWith('blob:')) {
+          textureLoader.setCrossOrigin('anonymous');
+        }
         textureLoader.load(
           fileUrl,
           (texture) => {
@@ -248,20 +252,48 @@ export class SceneManager {
     // D) AUDIO DIDÁCTICO
     // ==========================================
     else if (assetType === 'audio') {
+      const fileUrl = (asset.file_url || asset.url || '').trim();
       const title = asset.configuration?.title || 'Audio Didáctico';
       const audioBadge = this.createAudioBadgeMesh(title);
       audioBadge.userData.interactive = true;
       audioBadge.userData.markerName = markerName;
+
+      // Preparar elemento <audio> para reproducción por interacción del usuario
+      // Safari/iOS requiere que la reproducción con sonido sea iniciada por el usuario
+      if (fileUrl) {
+        const audio = document.createElement('audio');
+        audio.preload = 'metadata';
+        audio.src = fileUrl;
+        // NO hacer autoplay con sonido
+        audioBadge.userData.audioElement = audio;
+        audioBadge.userData.audioUrl = fileUrl;
+      }
+
       assetGroup.add(audioBadge);
     }
     // ==========================================
     // E) VIDEO DIGITAL
     // ==========================================
     else if (assetType === 'video') {
+      const fileUrl = (asset.file_url || asset.url || '').trim();
       const title = asset.configuration?.title || 'Video';
       const videoBoard = this.createVideoPlaceholderMesh(title);
       videoBoard.userData.interactive = true;
       videoBoard.userData.markerName = markerName;
+
+      // Preparar elemento <video> con playsinline para evitar fullscreen en iOS
+      if (fileUrl) {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+        video.playsInline = true;
+        video.src = fileUrl;
+        // NO hacer autoplay - requiere interacción del usuario (especialmente en Safari)
+        videoBoard.userData.videoElement = video;
+        videoBoard.userData.videoUrl = fileUrl;
+      }
+
       assetGroup.add(videoBoard);
     }
   }

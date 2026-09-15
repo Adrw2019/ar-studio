@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, RefreshCw, AlertTriangle, HelpCircle, Layers, FolderOpen,
-  Play, Sparkles, Printer, CheckCircle2, ShieldCheck, BookOpen
+  Play, Sparkles, Printer, CheckCircle2, ShieldCheck, BookOpen, WifiOff
 } from 'lucide-react';
 import ARViewer from '../components/ARViewer';
 import MarkerStatus from '../components/MarkerStatus';
@@ -10,8 +10,10 @@ import ARControls from '../components/ARControls';
 import LoadingScreen from '../components/LoadingScreen';
 import InfoModal from '../components/InfoModal';
 import TargetPreviewModal from '../components/TargetPreviewModal';
+import OfflineProjectManager from '../components/OfflineProjectManager';
 import { demoMarkers, interactionRules } from '../ar/config';
 import { apiService } from '../services/api';
+import { offlineStorage } from '../services/offlineStorage';
 import { resolveAssetPath } from '../utils/paths';
 
 export default function ARExperience() {
@@ -52,6 +54,10 @@ export default function ARExperience() {
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [resetTrigger, setResetTrigger] = useState(0);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+
+  // Referencia para limpiar Blob URLs al desmontar (crítico en iPhone/iPad)
+  const blobUrlsRef = useRef([]);
 
   const loadProject = useCallback(async () => {
     if (!slug) {
@@ -101,12 +107,20 @@ export default function ARExperience() {
 
     setLoadState('loading');
     setProjectError(null);
+    setIsOfflineMode(false);
     try {
       let project = await apiService.getProjectBySlug(slug);
       if (!project || !project.id) {
         project = await apiService.getProjectById(slug);
       }
       if (project && project.id) {
+        // Verificar si viene del almacenamiento offline
+        if (project._isOffline) {
+          setIsOfflineMode(true);
+          // Resolver URLs de assets a Blob URLs locales desde IndexedDB
+          project = await resolveOfflineProjectUrls(project);
+        }
+
         // Asegurar que markers esté presente si la consulta principal no los incluyó
         if (!project.markers || project.markers.length === 0) {
           try {
@@ -132,9 +146,62 @@ export default function ARExperience() {
     }
   }, [slug]);
 
+  /**
+   * Resuelve las URLs de un proyecto offline a Blob URLs desde IndexedDB
+   */
+  async function resolveOfflineProjectUrls(project) {
+    const projectId = String(project.id);
+    const resolved = { ...project };
+
+    try {
+      await offlineStorage.init();
+
+      // Resolver mind_file_url
+      if (project.mind_file_url) {
+        const mindBlobUrl = await offlineStorage.getMindFileBlobUrl(projectId, project.mind_file_url);
+        if (mindBlobUrl) {
+          resolved.mind_file_url = mindBlobUrl;
+          blobUrlsRef.current.push(mindBlobUrl);
+        }
+      }
+
+      // Resolver URLs de assets (GLB, imágenes, audio, video)
+      if (resolved.assets && resolved.assets.length > 0) {
+        for (let i = 0; i < resolved.assets.length; i++) {
+          const asset = resolved.assets[i];
+          const fileUrl = asset.file_url || asset.url || asset.asset_url || asset.model_url || '';
+          if (fileUrl && !fileUrl.startsWith('blob:') && !fileUrl.startsWith('data:')) {
+            const blobUrl = await offlineStorage.resolveAssetUrl(projectId, fileUrl);
+            if (blobUrl && blobUrl.startsWith('blob:')) {
+              resolved.assets[i] = { ...asset, file_url: blobUrl };
+              blobUrlsRef.current.push(blobUrl);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[ARExperience] Error al resolver URLs offline:', err);
+    }
+
+    return resolved;
+  }
+
   useEffect(() => {
     loadProject();
   }, [loadProject]);
+
+  // Limpiar Blob URLs al desmontar para evitar fugas de memoria (crítico en iPhone/iPad)
+  useEffect(() => {
+    return () => {
+      if (blobUrlsRef.current.length > 0) {
+        blobUrlsRef.current.forEach((url) => {
+          try { URL.revokeObjectURL(url); } catch (e) {}
+        });
+        blobUrlsRef.current = [];
+      }
+      offlineStorage.revokeAllBlobUrls();
+    };
+  }, []);
 
   // Callbacks para eventos del motor AR
   const handleStatusChange = useCallback((newStatus) => {
@@ -445,6 +512,32 @@ export default function ARExperience() {
                   </span>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Gestor de Proyecto Offline */}
+          {slug !== 'demo' && projectData && (
+            <OfflineProjectManager project={projectData} compact />
+          )}
+
+          {/* Badge de modo offline */}
+          {isOfflineMode && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.5rem 0.75rem',
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                borderRadius: '10px',
+                fontSize: '0.78rem',
+                color: '#f59e0b',
+                fontWeight: 600
+              }}
+            >
+              <WifiOff size={14} />
+              <span>Modo Offline — usando proyecto descargado localmente</span>
             </div>
           )}
 

@@ -203,20 +203,26 @@ export class MindARManager {
     }
 
     // Pre-verificar que el archivo de targets existe y responde con HTTP 200
-    try {
-      console.info('[MindARManager] Validando archivo de targets:', this.imageTargetSrc);
-      const res = await fetch(this.imageTargetSrc);
-      if (!res.ok) {
-        throw new Error(`Error ${res.status} al descargar ${this.imageTargetSrc}`);
+    // Si la URL es blob: (desde IndexedDB offline), omitir la validación por fetch
+    const isBlobUrl = this.imageTargetSrc && this.imageTargetSrc.startsWith('blob:');
+    if (!isBlobUrl) {
+      try {
+        console.info('[MindARManager] Validando archivo de targets:', this.imageTargetSrc);
+        const res = await fetch(this.imageTargetSrc);
+        if (!res.ok) {
+          throw new Error(`Error ${res.status} al descargar ${this.imageTargetSrc}`);
+        }
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength < 1000) {
+          throw new Error(`Archivo targets.mind corrupto o muy pequeño (${buf.byteLength} bytes).`);
+        }
+        console.info('[MindARManager] Targets validados exitosamente:', buf.byteLength, 'bytes.');
+      } catch (fetchErr) {
+        console.error('[MindARManager] Error al verificar marcadores:', fetchErr);
+        throw this.parseError(fetchErr);
       }
-      const buf = await res.arrayBuffer();
-      if (buf.byteLength < 1000) {
-        throw new Error(`Archivo targets.mind corrupto o muy pequeño (${buf.byteLength} bytes).`);
-      }
-      console.info('[MindARManager] Targets validados exitosamente:', buf.byteLength, 'bytes.');
-    } catch (fetchErr) {
-      console.error('[MindARManager] Error al verificar marcadores:', fetchErr);
-      throw this.parseError(fetchErr);
+    } else {
+      console.info('[MindARManager] Targets cargados desde almacenamiento offline (Blob URL).');
     }
 
     try {

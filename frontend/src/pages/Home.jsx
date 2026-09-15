@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Play, FolderKanban, Image, Sparkles, Smartphone, Layers, Cpu, Compass, Sliders, Globe, QrCode } from 'lucide-react';
 import Header from '../components/Header';
 import TargetPreviewModal from '../components/TargetPreviewModal';
+import InstallPrompt from '../components/InstallPrompt';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -63,6 +64,11 @@ export default function Home() {
             <Image size={18} color="var(--accent-cyan)" />
             <span>Ver Tarjetas Imprimibles</span>
           </button>
+        </div>
+
+        {/* PWA Install Prompt */}
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+          <InstallPrompt />
         </div>
       </section>
 
