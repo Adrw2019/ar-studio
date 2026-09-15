@@ -11,7 +11,7 @@ import { isAppleDevice, isSafari, isStandalone, isIPhone, isIPad } from '../util
  */
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showAppleInstructions, setShowAppleInstructions] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
@@ -30,7 +30,7 @@ export default function InstallPrompt() {
       setDismissed(true);
     }
 
-    // Capturar el evento beforeinstallprompt (Chrome/Edge)
+    // Capturar el evento beforeinstallprompt (Chrome/Edge/Android)
     const handleBeforeInstall = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -52,16 +52,20 @@ export default function InstallPrompt() {
   }, [standalone]);
 
   const handleInstallClick = useCallback(async () => {
-    if (!deferredPrompt) return;
-    try {
-      deferredPrompt.prompt();
-      const result = await deferredPrompt.userChoice;
-      if (result.outcome === 'accepted') {
-        setInstalled(true);
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const result = await deferredPrompt.userChoice;
+        if (result.outcome === 'accepted') {
+          setInstalled(true);
+        }
+        setDeferredPrompt(null);
+      } catch (err) {
+        console.warn('[InstallPrompt] Error al mostrar prompt:', err);
+        setShowInstructions(true);
       }
-      setDeferredPrompt(null);
-    } catch (err) {
-      console.warn('[InstallPrompt] Error al mostrar prompt:', err);
+    } else {
+      setShowInstructions((prev) => !prev);
     }
   }, [deferredPrompt]);
 
@@ -73,33 +77,29 @@ export default function InstallPrompt() {
   // No mostrar si ya está instalado o fue descartado
   if (installed || dismissed) return null;
 
-  // Determinar qué tipo de prompt mostrar
   const isApple = isAppleDevice();
-  const hasChromePrompt = !!deferredPrompt;
-
-  // Si no es Apple y no tiene prompt de Chrome, no mostrar nada (no mostrar botón roto)
-  if (!isApple && !hasChromePrompt) return null;
-
   const deviceLabel = isIPhone() ? 'iPhone' : isIPad() ? 'iPad' : 'dispositivo';
 
   return (
     <div style={{
-      background: 'rgba(13, 18, 29, 0.92)',
+      background: 'rgba(13, 18, 29, 0.95)',
       backdropFilter: 'blur(16px)',
       WebkitBackdropFilter: 'blur(16px)',
-      border: '1px solid rgba(0, 242, 254, 0.2)',
-      borderRadius: '18px',
-      padding: '1.25rem',
-      marginTop: '0.5rem',
+      border: '1px solid rgba(0, 242, 254, 0.25)',
+      borderRadius: '16px',
+      padding: '1rem 1.15rem',
+      marginTop: '0.75rem',
+      marginBottom: '0.75rem',
       width: '100%',
-      maxWidth: '480px',
+      maxWidth: '520px',
+      boxSizing: 'border-box'
     }}>
       {/* Header */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: '0.75rem'
+        marginBottom: '0.65rem'
       }}>
         <div style={{
           display: 'flex',
@@ -118,7 +118,7 @@ export default function InstallPrompt() {
             <Download size={16} color="#00f2fe" />
           </div>
           <span style={{
-            fontSize: '0.88rem',
+            fontSize: '0.92rem',
             fontWeight: 700,
             color: '#ffffff'
           }}>
@@ -144,86 +144,57 @@ export default function InstallPrompt() {
         </button>
       </div>
 
-      {/* Chrome/Edge: Botón de instalación directa */}
-      {hasChromePrompt && (
-        <button
-          type="button"
-          onClick={handleInstallClick}
-          style={{
-            width: '100%',
-            padding: '0.7rem 1rem',
-            background: 'linear-gradient(135deg, #00f2fe, #4facfe)',
-            color: '#050b14',
-            border: 'none',
-            borderRadius: '12px',
-            fontSize: '0.88rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.5rem',
-            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-            boxShadow: '0 4px 16px rgba(0, 242, 254, 0.25)'
-          }}
-        >
-          <Download size={18} />
-          <span>Instalar en este dispositivo</span>
-        </button>
-      )}
+      {/* Botón Principal de Instalación */}
+      <button
+        type="button"
+        onClick={handleInstallClick}
+        style={{
+          width: '100%',
+          padding: '0.65rem 1rem',
+          background: 'linear-gradient(135deg, #00f2fe, #4facfe)',
+          color: '#050b14',
+          border: 'none',
+          borderRadius: '12px',
+          fontSize: '0.88rem',
+          fontWeight: 700,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.5rem',
+          boxShadow: '0 4px 16px rgba(0, 242, 254, 0.25)'
+        }}
+      >
+        <Download size={17} />
+        <span>{deferredPrompt ? 'Instalar AR Studio' : `Instalar en ${isApple ? deviceLabel : 'dispositivo'}`}</span>
+      </button>
 
-      {/* Apple: Instrucciones manuales de instalación */}
-      {isApple && !hasChromePrompt && (
-        <>
-          {!showAppleInstructions ? (
-            <button
-              type="button"
-              onClick={() => setShowAppleInstructions(true)}
-              style={{
-                width: '100%',
-                padding: '0.7rem 1rem',
-                background: 'rgba(0, 242, 254, 0.1)',
-                color: '#00f2fe',
-                border: '1px solid rgba(0, 242, 254, 0.3)',
-                borderRadius: '12px',
-                fontSize: '0.88rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              <Smartphone size={16} />
-              <span>Instalar en {deviceLabel}</span>
-            </button>
-          ) : (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.6rem',
-            }}>
+      {/* Instrucciones Manuales (cuando se despliegan o en Apple/Navegadores sin evento directo) */}
+      {showInstructions && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.55rem',
+          marginTop: '0.75rem',
+          paddingTop: '0.75rem',
+          borderTop: '1px solid var(--border-subtle)'
+        }}>
+          {isApple ? (
+            <>
               <p style={{
                 margin: 0,
                 fontSize: '0.8rem',
                 color: 'var(--text-secondary)',
                 lineHeight: 1.45
               }}>
-                Para instalar AR Studio en tu {deviceLabel}, sigue estos pasos en <strong style={{ color: '#ffffff' }}>Safari</strong>:
+                Para instalar AR Studio en tu <strong style={{ color: '#ffffff' }}>{deviceLabel}</strong> mediante <strong style={{ color: '#ffffff' }}>Safari</strong>:
               </p>
 
               {/* Paso 1 */}
               <div style={stepStyle}>
                 <div style={stepNumberStyle}>1</div>
-                <span>Abre esta página en <strong>Safari</strong></span>
-              </div>
-
-              {/* Paso 2 */}
-              <div style={stepStyle}>
-                <div style={stepNumberStyle}>2</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                  <span>Pulsa el botón</span>
+                  <span>Pulsa</span>
                   <span style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -233,7 +204,8 @@ export default function InstallPrompt() {
                     borderRadius: '6px',
                     padding: '0.15rem 0.4rem',
                     fontSize: '0.78rem',
-                    color: '#007AFF'
+                    color: '#007AFF',
+                    fontWeight: 600
                   }}>
                     <Share size={12} />
                     Compartir
@@ -241,21 +213,22 @@ export default function InstallPrompt() {
                 </div>
               </div>
 
-              {/* Paso 3 */}
+              {/* Paso 2 */}
               <div style={stepStyle}>
-                <div style={stepNumberStyle}>3</div>
+                <div style={stepNumberStyle}>2</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
                   <span>Selecciona</span>
                   <span style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '0.2rem',
-                    background: 'rgba(255, 255, 255, 0.06)',
+                    background: 'rgba(255, 255, 255, 0.08)',
                     border: '1px solid var(--border-subtle)',
                     borderRadius: '6px',
                     padding: '0.15rem 0.4rem',
                     fontSize: '0.78rem',
-                    color: '#ffffff'
+                    color: '#ffffff',
+                    fontWeight: 600
                   }}>
                     <Plus size={12} />
                     Añadir a pantalla de inicio
@@ -263,28 +236,38 @@ export default function InstallPrompt() {
                 </div>
               </div>
 
-              {/* Paso 4 */}
+              {/* Paso 3 */}
               <div style={stepStyle}>
-                <div style={stepNumberStyle}>4</div>
+                <div style={stepNumberStyle}>3</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   <span>Pulsa</span>
                   <strong style={{ color: '#007AFF' }}>"Añadir"</strong>
                 </div>
               </div>
-
+            </>
+          ) : (
+            <>
               <p style={{
                 margin: 0,
-                fontSize: '0.75rem',
-                color: 'var(--text-muted)',
-                lineHeight: 1.4,
-                paddingTop: '0.25rem',
-                borderTop: '1px solid var(--border-subtle)'
+                fontSize: '0.8rem',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.45
               }}>
-                La app se abrirá como aplicación independiente desde tu pantalla de inicio.
+                Para instalar AR Studio en tu navegador <strong style={{ color: '#ffffff' }}>Chrome / Android</strong>:
               </p>
-            </div>
+
+              <div style={stepStyle}>
+                <div style={stepNumberStyle}>1</div>
+                <span>Toca el menú de tres puntos (<strong>⋮</strong>) en la esquina superior derecha</span>
+              </div>
+
+              <div style={stepStyle}>
+                <div style={stepNumberStyle}>2</div>
+                <span>Selecciona <strong>"Instalar aplicación"</strong> o <strong>"Añadir a pantalla de inicio"</strong></span>
+              </div>
+            </>
           )}
-        </>
+        </div>
       )}
     </div>
   );

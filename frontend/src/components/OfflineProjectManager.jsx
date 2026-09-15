@@ -24,6 +24,12 @@ export default function OfflineProjectManager({ project, compact = false }) {
 
   const projectId = project?.id;
 
+  // Verificar si el proyecto está preparado para uso offline (tiene targets.mind o tarjetas listas)
+  const hasMindFile = Boolean(project?.mind_file_url && String(project.mind_file_url).trim().length > 0);
+  const hasTargetImages = Boolean(project?.markers && project.markers.length > 0);
+  const isTrackingReady = project?.tracking_status === 'ready' || (hasMindFile && hasTargetImages);
+  const isProjectReady = hasMindFile || isTrackingReady;
+
   // Verificar estado offline del proyecto al montar
   useEffect(() => {
     if (!projectId) return;
@@ -73,7 +79,6 @@ export default function OfflineProjectManager({ project, compact = false }) {
       setStorageInfo(storage);
     } catch (err) {
       console.warn('[OfflineManager] Error al estimar tamaño:', err);
-      // Aún así permitir la descarga
       setEstimatedSize({ totalBytes: 0, formattedSize: 'Desconocido', assetCount: 0 });
     }
   }, [project]);
@@ -96,7 +101,7 @@ export default function OfflineProjectManager({ project, compact = false }) {
       });
     } catch (err) {
       console.error('[OfflineManager] Error al descargar:', err);
-      setError(`Error al descargar: ${err.message}`);
+      setError(`No se pudo completar la descarga: ${err.message}`);
     } finally {
       setDownloading(false);
     }
@@ -119,7 +124,7 @@ export default function OfflineProjectManager({ project, compact = false }) {
       });
     } catch (err) {
       console.error('[OfflineManager] Error al actualizar:', err);
-      setError(`Error al actualizar: ${err.message}`);
+      setError(`No se pudo completar la actualización: ${err.message}`);
     } finally {
       setDownloading(false);
     }
@@ -147,298 +152,91 @@ export default function OfflineProjectManager({ project, compact = false }) {
   const primaryColor = project.theme?.primaryColor || '#00f2fe';
 
   // ============================================================
-  // Modo compacto (para la pantalla de bienvenida AR)
+  // RENDERING DE ESTADOS
   // ============================================================
-  if (compact) {
+
+  // ESTADO: PROYECTO NO PREPARADO
+  if (!isProjectReady) {
     return (
       <div style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.5rem',
-        width: '100%'
+        gap: '0.35rem',
+        padding: '0.65rem 0.85rem',
+        background: 'rgba(245, 158, 11, 0.06)',
+        border: '1px solid rgba(245, 158, 11, 0.2)',
+        borderRadius: '12px',
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
-        {/* Estado de conectividad */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.4rem',
-          fontSize: '0.72rem',
-          color: isOnline ? '#10b981' : '#f59e0b',
-          fontWeight: 600
-        }}>
-          {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
-          <span>{isOnline ? 'Conectado' : 'Sin conexión'}</span>
-          {isOffline && (
-            <span style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-              marginLeft: 'auto',
-              color: '#10b981'
-            }}>
-              <CheckCircle2 size={12} />
-              Disponible offline
-            </span>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f59e0b', fontSize: '0.8rem', fontWeight: 600 }}>
+          <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+          <span>Uso sin conexión no disponible todavía</span>
         </div>
-
-        {/* Descargando */}
-        {downloading && (
-          <div style={{
-            background: 'rgba(0, 242, 254, 0.08)',
-            border: '1px solid rgba(0, 242, 254, 0.2)',
-            borderRadius: '10px',
-            padding: '0.5rem 0.65rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.35rem'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', color: '#00f2fe' }}>
-              <Loader2 size={14} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
-              <span>Descargando proyecto... {progress}%</span>
-            </div>
-            <div style={{
-              height: '4px',
-              background: 'rgba(255,255,255,0.1)',
-              borderRadius: '2px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                height: '100%',
-                width: `${progress}%`,
-                background: 'linear-gradient(90deg, #00f2fe, #4facfe)',
-                borderRadius: '2px',
-                transition: 'width 0.3s ease'
-              }} />
-            </div>
-          </div>
-        )}
-
-        {/* Error */}
-        {error && (
-          <div style={{
-            fontSize: '0.75rem',
-            color: '#ef4444',
-            padding: '0.35rem 0.5rem',
-            background: 'rgba(239, 68, 68, 0.1)',
-            borderRadius: '8px',
-            border: '1px solid rgba(239, 68, 68, 0.2)'
-          }}>
-            {error}
-          </div>
-        )}
-
-        {/* Confirmación de descarga */}
-        {showConfirm === 'download' && !downloading && (
-          <div style={{
-            background: 'rgba(0, 242, 254, 0.05)',
-            border: '1px solid rgba(0, 242, 254, 0.15)',
-            borderRadius: '12px',
-            padding: '0.65rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.4rem'
-          }}>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-              <HardDrive size={13} style={{ marginRight: '0.3rem', verticalAlign: '-2px' }} />
-              {estimatedSize
-                ? `Este proyecto requiere aproximadamente ${estimatedSize.formattedSize}.`
-                : 'Calculando tamaño...'}
-            </div>
-            {storageInfo && (
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Espacio disponible: {storageInfo.formattedAvailable}
-              </div>
-            )}
-            {estimatedSize && estimatedSize.totalBytes > 50 * 1024 * 1024 && (
-              <div style={{ fontSize: '0.72rem', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <AlertTriangle size={11} />
-                Descarga grande. Asegúrate de estar en Wi-Fi.
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                type="button"
-                onClick={() => setShowConfirm(null)}
-                style={compactBtnSecondary}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleDownload}
-                style={{
-                  ...compactBtnPrimary,
-                  background: primaryColor,
-                  borderColor: primaryColor
-                }}
-              >
-                <Download size={13} />
-                Descargar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Confirmación de eliminación */}
-        {showConfirm === 'delete' && (
-          <div style={{
-            background: 'rgba(239, 68, 68, 0.05)',
-            border: '1px solid rgba(239, 68, 68, 0.2)',
-            borderRadius: '12px',
-            padding: '0.65rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.4rem'
-          }}>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-primary)' }}>
-              ¿Eliminar la descarga offline de este proyecto?
-            </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button type="button" onClick={() => setShowConfirm(null)} style={compactBtnSecondary}>
-                Cancelar
-              </button>
-              <button type="button" onClick={handleDelete} style={{ ...compactBtnSecondary, color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}>
-                <Trash2 size={13} />
-                Eliminar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Botones de acción (cuando no hay confirmación activa) */}
-        {!showConfirm && !downloading && (
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            {!isOffline && isOnline && (
-              <button
-                type="button"
-                onClick={handlePrepareDownload}
-                style={compactBtnPrimary}
-              >
-                <Download size={14} />
-                <span>Descargar para uso offline</span>
-              </button>
-            )}
-            {!isOffline && !isOnline && (
-              <div style={{
-                fontSize: '0.78rem',
-                color: '#f59e0b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                padding: '0.4rem 0.6rem',
-                background: 'rgba(245, 158, 11, 0.08)',
-                borderRadius: '10px',
-                border: '1px solid rgba(245, 158, 11, 0.2)',
-                width: '100%'
-              }}>
-                <CloudOff size={14} />
-                <span>Proyecto no disponible offline. Conéctate a Internet para descargarlo.</span>
-              </div>
-            )}
-            {isOffline && (
-              <>
-                {isOnline && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowConfirm(null);
-                      handleUpdate();
-                    }}
-                    style={compactBtnSecondary}
-                  >
-                    <RefreshCw size={13} />
-                    <span>Actualizar</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowConfirm('delete')}
-                  style={{ ...compactBtnSecondary, color: '#ef4444', borderColor: 'rgba(239,68,68,0.2)' }}
-                >
-                  <Trash2 size={13} />
-                  <span>Eliminar</span>
-                </button>
-              </>
-            )}
-          </div>
-        )}
+        <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', lineHeight: 1.45, paddingLeft: '1.35rem' }}>
+          Primero debes preparar y publicar las tarjetas de este proyecto.
+        </div>
       </div>
     );
   }
 
-  // ============================================================
-  // Modo completo (para la página de proyectos, si se necesita)
-  // ============================================================
   return (
     <div style={{
-      background: 'rgba(13, 18, 29, 0.92)',
-      backdropFilter: 'blur(16px)',
-      WebkitBackdropFilter: 'blur(16px)',
-      border: '1px solid var(--border-subtle)',
-      borderRadius: '16px',
-      padding: '1rem',
       display: 'flex',
       flexDirection: 'column',
-      gap: '0.75rem'
+      gap: '0.5rem',
+      width: '100%',
+      boxSizing: 'border-box',
+      ...(compact ? {} : {
+        background: 'rgba(13, 18, 29, 0.85)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: '14px',
+        padding: '0.85rem'
+      })
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-          Disponibilidad Offline
-        </span>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.3rem',
-          fontSize: '0.72rem',
-          color: isOnline ? '#10b981' : '#f59e0b',
-          fontWeight: 600
-        }}>
-          {isOnline ? <Wifi size={11} /> : <WifiOff size={11} />}
-          {isOnline ? 'Online' : 'Offline'}
+      {/* Estado de conectividad y disponibilidad */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        fontSize: '0.74rem',
+        fontWeight: 600
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: isOnline ? '#10b981' : '#f59e0b' }}>
+          {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
+          <span>{isOnline ? 'En línea' : 'Sin conexión'}</span>
         </div>
+
+        {isOffline && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#10b981' }}>
+            <CheckCircle2 size={13} />
+            <span>✓ Disponible sin conexión</span>
+          </div>
+        )}
       </div>
 
-      {isOffline ? (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          padding: '0.5rem 0.65rem',
-          background: 'rgba(16, 185, 129, 0.08)',
-          border: '1px solid rgba(16, 185, 129, 0.2)',
-          borderRadius: '10px'
-        }}>
-          <CheckCircle2 size={16} color="#10b981" />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#10b981' }}>Disponible offline</div>
-            {offlineProjectInfo && (
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                Descargado: {new Date(offlineProjectInfo.downloadedAt).toLocaleDateString('es')}
-                {offlineProjectInfo.totalSize ? ` · ${offlineStorage._formatBytes(offlineProjectInfo.totalSize)}` : ''}
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div style={{
-          fontSize: '0.78rem',
-          color: 'var(--text-secondary)',
-          lineHeight: 1.4
-        }}>
-          Descarga este proyecto para usarlo sin conexión a Internet.
-        </div>
-      )}
-
+      {/* ESTADO 2: DESCARGANDO */}
       {downloading && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-            <span style={{ fontSize: '0.75rem', color: '#00f2fe' }}>Descargando...</span>
-            <span style={{ fontSize: '0.75rem', color: '#00f2fe' }}>{progress}%</span>
+        <div style={{
+          background: 'rgba(0, 242, 254, 0.08)',
+          border: '1px solid rgba(0, 242, 254, 0.25)',
+          borderRadius: '12px',
+          padding: '0.65rem 0.85rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.4rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#00f2fe', fontWeight: 600 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Loader2 size={15} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+              Descargando... {progress}%
+            </span>
           </div>
           <div style={{
             height: '6px',
-            background: 'rgba(255,255,255,0.08)',
+            background: 'rgba(255, 255, 255, 0.1)',
             borderRadius: '3px',
             overflow: 'hidden'
           }}>
@@ -453,15 +251,180 @@ export default function OfflineProjectManager({ project, compact = false }) {
         </div>
       )}
 
-      {error && (
+      {/* ESTADO 4: ERROR */}
+      {error && !downloading && (
         <div style={{
-          fontSize: '0.78rem',
-          color: '#ef4444',
-          padding: '0.4rem 0.6rem',
           background: 'rgba(239, 68, 68, 0.08)',
-          borderRadius: '8px'
+          border: '1px solid rgba(239, 68, 68, 0.25)',
+          borderRadius: '12px',
+          padding: '0.65rem 0.85rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.4rem'
         }}>
-          {error}
+          <div style={{ fontSize: '0.78rem', color: '#ef4444', fontWeight: 600 }}>
+            No se pudo completar la descarga
+          </div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+            {error}
+          </div>
+          <button
+            type="button"
+            onClick={handleDownload}
+            style={{
+              ...compactBtnPrimary,
+              background: 'rgba(239, 68, 68, 0.15)',
+              color: '#ef4444',
+              borderColor: 'rgba(239, 68, 68, 0.3)',
+              alignSelf: 'flex-start',
+              padding: '0.4rem 0.8rem'
+            }}
+          >
+            <RefreshCw size={13} />
+            <span>Reintentar</span>
+          </button>
+        </div>
+      )}
+
+      {/* CONFIRMACIÓN DE DESCARGA */}
+      {showConfirm === 'download' && !downloading && (
+        <div style={{
+          background: 'rgba(0, 242, 254, 0.06)',
+          border: '1px solid rgba(0, 242, 254, 0.2)',
+          borderRadius: '12px',
+          padding: '0.75rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem'
+        }}>
+          <div style={{ fontSize: '0.8rem', color: '#ffffff', fontWeight: 600 }}>
+            <HardDrive size={14} style={{ marginRight: '0.35rem', verticalAlign: '-2px', color: '#00f2fe' }} />
+            {estimatedSize
+              ? `Tamaño aproximado: ${estimatedSize.formattedSize}`
+              : 'Calculando tamaño...'}
+          </div>
+          {storageInfo && (
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              Almacenamiento disponible: {storageInfo.formattedAvailable}
+            </div>
+          )}
+          {estimatedSize && estimatedSize.totalBytes > 50 * 1024 * 1024 && (
+            <div style={{ fontSize: '0.72rem', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <AlertTriangle size={12} />
+              Descarga grande. Se recomienda usar Wi-Fi.
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+            <button
+              type="button"
+              onClick={() => setShowConfirm(null)}
+              style={compactBtnSecondary}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              style={{
+                ...compactBtnPrimary,
+                background: 'linear-gradient(135deg, #00f2fe, #4facfe)',
+                color: '#050b14',
+                borderColor: 'transparent',
+                fontWeight: 700
+              }}
+            >
+              <Download size={14} />
+              <span>Confirmar Descarga</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMACIÓN DE ELIMINACIÓN */}
+      {showConfirm === 'delete' && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.06)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: '12px',
+          padding: '0.75rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem'
+        }}>
+          <div style={{ fontSize: '0.8rem', color: '#ffffff', fontWeight: 600 }}>
+            ¿Eliminar la descarga offline de este proyecto?
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button type="button" onClick={() => setShowConfirm(null)} style={compactBtnSecondary}>
+              Cancelar
+            </button>
+            <button type="button" onClick={handleDelete} style={{ ...compactBtnSecondary, color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.1)' }}>
+              <Trash2 size={13} />
+              <span>Eliminar</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ESTADO 1: NO DESCARGADO & ESTADO 3: DESCARGADO (BOTONES PRINCIPALES) */}
+      {!showConfirm && !downloading && !error && (
+        <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+          {/* ESTADO 1: NO DESCARGADO */}
+          {!isOffline && isOnline && (
+            <button
+              type="button"
+              onClick={handlePrepareDownload}
+              style={compactBtnPrimary}
+            >
+              <Download size={15} />
+              <span>Descargar para usar sin Internet</span>
+            </button>
+          )}
+
+          {!isOffline && !isOnline && (
+            <div style={{
+              fontSize: '0.78rem',
+              color: '#f59e0b',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.5rem 0.65rem',
+              background: 'rgba(245, 158, 11, 0.08)',
+              borderRadius: '10px',
+              border: '1px solid rgba(245, 158, 11, 0.2)',
+              width: '100%'
+            }}>
+              <CloudOff size={14} />
+              <span>Conéctate a Internet para descargar este proyecto.</span>
+            </div>
+          )}
+
+          {/* ESTADO 3: DESCARGADO */}
+          {isOffline && (
+            <>
+              {isOnline && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConfirm(null);
+                    handleUpdate();
+                  }}
+                  style={compactBtnSecondary}
+                >
+                  <RefreshCw size={13} />
+                  <span>Actualizar</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowConfirm('delete')}
+                style={{ ...compactBtnSecondary, color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
+              >
+                <Trash2 size={13} />
+                <span>Eliminar descarga</span>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

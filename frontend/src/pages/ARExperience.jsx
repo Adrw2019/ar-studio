@@ -463,9 +463,16 @@ export default function ARExperience() {
             {projectIntro}
           </p>
 
+          {/* Gestor de Proyecto Offline - Ubicado Arriba para Máxima Visibilidad en Móviles */}
+          {projectData && (
+            <div style={{ textAlign: 'left', width: '100%' }}>
+              <OfflineProjectManager project={projectData} compact />
+            </div>
+          )}
+
           {/* Resumen de Tarjetas Físicas */}
           {markersList.length > 0 && (
-            <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                   Tarjetas para esta experiencia ({markersList.length}):
@@ -513,11 +520,6 @@ export default function ARExperience() {
                 ))}
               </div>
             </div>
-          )}
-
-          {/* Gestor de Proyecto Offline */}
-          {slug !== 'demo' && projectData && (
-            <OfflineProjectManager project={projectData} compact />
           )}
 
           {/* Badge de modo offline */}

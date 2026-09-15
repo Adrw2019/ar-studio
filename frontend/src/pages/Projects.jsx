@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, Sparkles, Box, Atom, Zap, Globe } from 'lucide-react';
 import { apiService } from '../services/api';
+import OfflineProjectManager from '../components/OfflineProjectManager';
+import InstallPrompt from '../components/InstallPrompt';
 
 export default function Projects() {
   const navigate = useNavigate();
@@ -23,7 +25,9 @@ export default function Projects() {
             slug: 'motor-energia-demo',
             category: 'Electromagnetismo',
             cardsCount: 2,
-            icon: Zap
+            icon: Zap,
+            tracking_status: 'ready',
+            mind_file_url: '/assets/targets.mind'
           },
           {
             id: '2',
@@ -32,7 +36,9 @@ export default function Projects() {
             slug: 'biologia-celular',
             category: 'Ciencias Naturales',
             cardsCount: 3,
-            icon: Atom
+            icon: Atom,
+            tracking_status: 'ready',
+            mind_file_url: '/assets/targets.mind'
           },
           {
             id: '3',
@@ -41,7 +47,9 @@ export default function Projects() {
             slug: 'sistema-solar',
             category: 'Astronomía',
             cardsCount: 8,
-            icon: Globe
+            icon: Globe,
+            tracking_status: 'ready',
+            mind_file_url: '/assets/targets.mind'
           }
         ]);
       }
@@ -66,14 +74,18 @@ export default function Projects() {
         <div style={{ width: '48px' }} />
       </header>
 
+      {/* Instalación PWA */}
+      <InstallPrompt />
+
       <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-        Explora las experiencias interactivas disponibles para escanear con tus tarjetas de Realidad Aumentada:
+        Explora las experiencias interactivas disponibles y descárgalas para usarlas sin conexión a Internet:
       </p>
 
       {/* Lista de Proyectos */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
         {projects.map((project) => {
           const Icon = project.icon || Box;
+          const targetSlug = project.slug || project.id || 'demo';
           return (
             <div
               key={project.id}
@@ -103,14 +115,18 @@ export default function Projects() {
                 {project.description}
               </p>
 
+              {/* Componente de Gestión Offline del Proyecto */}
+              <OfflineProjectManager project={project} compact />
+
+              {/* Botón Principal para iniciar experiencia AR */}
               <button
                 type="button"
                 className="btn btn-primary"
                 style={{ width: '100%', marginTop: '0.25rem' }}
-                onClick={() => navigate('/ar/demo')}
+                onClick={() => navigate(`/ar/${targetSlug}`)}
               >
                 <Play size={18} fill="#050b14" />
-                <span>Iniciar experiencia</span>
+                <span>Iniciar experiencia AR</span>
               </button>
             </div>
           );
